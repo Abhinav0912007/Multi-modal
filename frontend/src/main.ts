@@ -19,6 +19,8 @@ import { ProcessingDrawer } from './components/ProcessingDrawer'
 import { JobCenter } from './components/JobCenter'
 import { jobService } from './services/jobService'
 import { StarfieldBackdrop } from './components/StarfieldBackdrop'
+import { GuidedMissionWorkflow } from './components/GuidedMissionWorkflow'
+import { DemonstrationSummaryModal } from './components/DemonstrationSummaryModal'
 
 // Current active view
 type ActiveTab = 'mission-control' | 'dataset-explorer' | 'roi-explorer' | 'feature-correspondence' | 'spatial-analysis' | 'alignment-studio' | 'transformation-analysis' | 'export-workspace' | 'job-center'
@@ -152,6 +154,9 @@ appEl.innerHTML = `
       <span style="color:var(--cyan-bright); font-weight:600;">CATALOG v2.0</span>
     </div>
   </nav>
+
+  <!-- GUIDED MISSION RUN WORKFLOW (PHASE 15: JUDGING & DEMO) -->
+  <div id="guided-workflow-mount"></div>
 
   <!-- VIEW 1: MISSION CONTROL DASHBOARD -->
   <div id="view-mission-control" style="display:flex; flex-direction:column; gap:20px;">
@@ -332,6 +337,9 @@ const viewTransformation = document.querySelector<HTMLDivElement>('#view-transfo
 const viewExport = document.querySelector<HTMLDivElement>('#view-export-workspace')!
 const viewJobCenter = document.querySelector<HTMLDivElement>('#view-job-center')!
 
+// Guided Mission Workflow reference (Phase 15)
+let guidedWorkflow: GuidedMissionWorkflow | null = null
+
 function switchTab(tab: ActiveTab) {
   state.currentTab = tab
   navBtnMission.classList.toggle('active', tab === 'mission-control')
@@ -377,6 +385,11 @@ function switchTab(tab: ActiveTab) {
   }
   if (tab === 'job-center' && jobCenter) {
     jobCenter.loadJobs()
+  }
+
+  // Synchronize 8-stage guided workflow
+  if (guidedWorkflow) {
+    guidedWorkflow.syncWithActiveTab(tab)
   }
 }
 
@@ -622,6 +635,20 @@ const jobCenter = new JobCenter(
   }
 )
 
+// 17. Initialize Demonstration Summary Modal (Phase 15: Judging & Verification)
+const demonstrationSummaryModal = new DemonstrationSummaryModal((tab, pairId) => {
+  if (pairId) selectPair(pairId)
+  switchTab(tab as ActiveTab)
+})
+
+// 18. Initialize Guided Mission Workflow (Phase 15: 8-Stage Guided Tour & Judge Presentation)
+const workflowMount = document.querySelector<HTMLDivElement>('#guided-workflow-mount')!
+guidedWorkflow = new GuidedMissionWorkflow(
+  workflowMount,
+  (tab) => switchTab(tab as ActiveTab),
+  () => demonstrationSummaryModal.open(state.systemStatus.activePair, state.metrics)
+)
+
 // Synchronize global jobService events with Header, Mission Dashboard, Pipeline, and Console
 jobService.subscribe((job) => {
   if (!job) return
@@ -658,6 +685,9 @@ jobService.subscribe((job) => {
     statisticsGrid.update(state.metrics, false)
     pipelineSection.markAllCompleted()
     launchController.logToConsole(`Job #${job.job_id.slice(-6)} completed with ${job.metrics?.inliers || 786} inliers.`)
+
+    // Phase 15: Open Scientific Result Summary & Before/After Comparison for judges
+    demonstrationSummaryModal.open(state.systemStatus.activePair, state.metrics)
   } else if (job.status === 'failed') {
     state.isProcessing = false
     state.systemStatus.processingStatus = 'ERROR'
