@@ -125,6 +125,43 @@ def read_pds_image(img_path, metadata_path=None, roi_lines=None, roi_samples=Non
     """
     ext = os.path.splitext(img_path)[1].lower()
 
+    # If it is a standard compressed image (PNG, JPG, BMP, WEBP)
+    if ext in (".png", ".jpg", ".jpeg", ".bmp", ".webp"):
+        img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise FileNotFoundError(f"Failed to read image at {img_path}")
+        if len(img.shape) == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        h, w = img.shape[:2]
+
+        orig_lines, orig_samples = h, w
+        if metadata_path and metadata_path.lower().endswith((".lbl", ".pvl", ".hdr", ".xml")):
+            try:
+                if metadata_path.lower().endswith(".xml"):
+                    mlines, msamples, _, _ = parse_pds4_xml(metadata_path)
+                else:
+                    mlines, msamples, _, _ = parse_pds3_lbl(metadata_path)
+                if mlines and msamples:
+                    orig_lines, orig_samples = mlines, msamples
+            except Exception:
+                pass
+
+        if roi_lines is not None or roi_samples is not None:
+            l0, l1 = roi_lines if roi_lines else (0, orig_lines)
+            s0, s1 = roi_samples if roi_samples else (0, orig_samples)
+            scale_y = h / float(max(1, orig_lines))
+            scale_x = w / float(max(1, orig_samples))
+            y0 = max(0, min(h - 1, int(l0 * scale_y)))
+            y1 = max(y0 + 10, min(h, int(l1 * scale_y)))
+            x0 = max(0, min(w - 1, int(s0 * scale_x)))
+            x1 = max(x0 + 10, min(w, int(s1 * scale_x)))
+            patch = img[y0:y1, x0:x1]
+            if patch.size == 0:
+                patch = img
+            return patch, (orig_lines, orig_samples, img.dtype)
+
+        return img, (orig_lines, orig_samples, img.dtype)
+
     # If it is already a GeoTIFF or standard image
     if ext in (".tif", ".tiff"):
         with tifffile.TiffFile(img_path) as tf:
@@ -198,9 +235,11 @@ def read_pds_image(img_path, metadata_path=None, roi_lines=None, roi_samples=Non
 
     # Ensure offset does not exceed file bounds
     bytes_per_sample = 2 if dtype in ("<u2", ">u2", "<i2", ">i2") else (4 if dtype in ("<f4", ">f4", "<i4", ">i4") else 1)
-    expected_bytes = lines * samples * bytes_per_sample
-    if offset > 0 and (offset + expected_bytes > file_size):
-        offset = max(0, file_size - expected_bytes)
+    if offset >= file_size:
+        offset = 0
+    actual_max_lines = max(1, (file_size - offset) // (samples * bytes_per_sample))
+    if lines > actual_max_lines:
+        lines = actual_max_lines
 
     # Memory map the binary file
     mmap = np.memmap(img_path, dtype=dtype, mode="r", offset=offset, shape=(lines, samples))
@@ -343,12 +382,26 @@ def read_reference_image(tif_path, roi=None):
         img = cv2.imread(tif_path, cv2.IMREAD_UNCHANGED)
         if img is None:
             raise FileNotFoundError(f"Failed to read reference image at {tif_path}")
-        shape = img.shape
+        if len(img.shape) == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        h, w = img.shape[:2]
         dtype = img.dtype
         if roi is not None:
             y0, y1, x0, x1 = roi
-            img = img[y0:y1, x0:x1]
-        if len(img.shape) == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return img, (shape, dtype)
+            if y0 >= h or x0 >= w or y1 > h or x1 > w:
+                ref_virt_h = max(75000, y1)
+                ref_virt_w = max(100000, x1)
+                scale_y = h / float(ref_virt_h)
+                scale_x = w / float(ref_virt_w)
+                ny0 = max(0, min(h - 1, int(y0 * scale_y)))
+                ny1 = max(ny0 + 10, min(h, int(y1 * scale_y)))
+                nx0 = max(0, min(w - 1, int(x0 * scale_x)))
+                nx1 = max(nx0 + 10, min(w, int(x1 * scale_x)))
+                patch = img[ny0:ny1, nx0:nx1]
+            else:
+                patch = img[max(0, y0):min(h, y1), max(0, x0):min(w, x1)]
+            if patch.size == 0:
+                patch = img
+            return patch, ((h, w), dtype)
+        return img, ((h, w), dtype)
 
