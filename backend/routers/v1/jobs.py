@@ -25,6 +25,17 @@ async def submit_registration_job(req: JobCreateRequest):
     )
 
 
+@router.get("/jobs")
+def list_all_jobs(limit: int = 50):
+    """
+    Lists historical and active registration jobs from the persistent database.
+    Used by the Job Center to inspect previous runs.
+    """
+    if hasattr(registration_service.worker, "list_historical_jobs"):
+        return registration_service.worker.list_historical_jobs(limit=limit)
+    return []
+
+
 @router.get("/jobs/{job_id}", response_model=JobDetailResponse)
 async def get_job_status(job_id: str):
     """

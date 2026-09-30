@@ -106,33 +106,33 @@ export class LunarHero {
     this.renderer.domElement.style.width = '100%'
     this.renderer.domElement.style.height = '100%'
 
-    // 1. Primary Directional Sunlight (intense, photorealistic solar rays from deep space)
-    const sunLight = new THREE.DirectionalLight(0xffffff, 2.6)
-    sunLight.position.set(-45, 25, 35)
+    // 1. Primary Directional Sunlight (Crisp solar rays from deep space, creating realistic terminator relief)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.4)
+    sunLight.position.set(-50, 20, 30)
     this.scene.add(sunLight)
 
-    // 2. Interactive Cursor Point Light (highlights crater rims dynamically without distance decay)
-    this.pointLight = new THREE.PointLight(0xffffff, 1.8, 0, 0)
+    // 2. Interactive Cursor Light (Subtle local rim relief highlight)
+    this.pointLight = new THREE.PointLight(0xffffff, 0.7, 0, 0)
     this.pointLight.position.set(-20, 15, 25)
     this.scene.add(this.pointLight)
 
-    // 3. Ambient Illumination (Earthshine & cosmic scatter so craters on dark side stay clearly visible)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45)
+    // 3. Ambient Cosmic Illumination (Realistic deep space Earthshine; preserves terminator contrast)
+    const ambientLight = new THREE.AmbientLight(0x1e293b, 0.38)
     this.scene.add(ambientLight)
 
-    // 4. Directional Rim Light (ISRO cyan rim glow along the lunar limb)
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.85)
+    // 4. Directional Lunar Limb Accent
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.35)
     rimLight.position.set(50, -30, -25)
     this.scene.add(rimLight)
 
     // High definition 3D Moon sphere geometry
     const geometry = new THREE.SphereGeometry(this.moonRadius3D, 64, 64)
 
-    // Normal mapped lunar material with vivid albedo and crater relief
+    // Normal-mapped lunar regolith material: matte retro-reflection, subtle specular
     const material = new THREE.MeshPhongMaterial({
       color: 0xffffff,
-      shininess: 6,
-      specular: 0x333333
+      shininess: 2,
+      specular: 0x181818
     })
 
     const texLoader = new THREE.TextureLoader()

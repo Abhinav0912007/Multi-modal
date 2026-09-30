@@ -5,16 +5,27 @@ Chandrayaan-1 TMC Lunar Image Registration System — FastAPI Backend
 import matplotlib
 matplotlib.use("Agg")  # Thread-safe non-interactive backend for matplotlib
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import CORS_ORIGINS
+from backend.db.init_db import init_db
 from backend.routers import pairs, artifacts, terrain, pipeline, preview, datasets, features, spatial, alignment, transformation
 from backend.routers.v1 import api_v1_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Executes on startup: initializes DB tables and synchronizes catalog."""
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="Chandrayaan-1 TMC Registration API",
     description="Backend API for the Lunar Image Registration System with /api/v1 versioning and job-based asynchronous processing",
     version="2.1.0",
+    lifespan=lifespan,
 )
 
 # CORS
