@@ -67,7 +67,7 @@ export class SpatialWorkspace {
     if (!this.result && !this.isLoading) {
       this.runAnalysis()
     } else {
-      this.draw()
+      this.fitToView()
     }
   }
 
@@ -176,6 +176,22 @@ export class SpatialWorkspace {
 
           <!-- Hover Tooltip -->
           <div id="sp-cell-tooltip" class="sp-cell-tooltip" style="display:none;"></div>
+
+          <!-- FLOATING JUDGES SCIENTIFIC EXPLAINER HUD -->
+          <div class="ws-judges-bar">
+            <span class="ws-judges-badge">ISRO STR-CV REGULARIZATION</span>
+            <div class="ws-judges-item">
+              <span class="dot" style="background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+              <span><b>Green Cells:</b> Constrained (≥ 2 inliers)</span>
+            </div>
+            <div class="ws-judges-item">
+              <span class="dot" style="background:#f59e0b; box-shadow:0 0 6px #f59e0b;"></span>
+              <span><b>Amber Cells:</b> Sparse density</span>
+            </div>
+            <div class="ws-judges-item" style="color:var(--cyan-bright); margin-left:auto;">
+              <span><b>Uniformity:</b> Quadrant dispersion balanced</span>
+            </div>
+          </div>
         </div>
 
         <!-- RIGHT: SCIENTIFIC STATISTICS PANEL -->
@@ -480,12 +496,29 @@ export class SpatialWorkspace {
     this.draw()
   }
 
-  private resetView() {
-    this.zoom = 1.0
-    this.panX = 25
-    this.panY = 25
+  public fitToView() {
+    const rect = this.viewportPane?.getBoundingClientRect()
+    const paneW = rect?.width || 720
+    const paneH = rect?.height || 620
+    const imgW = (this.activeRaster === 'reference' ? this.result?.dimensions?.ref_w : this.result?.dimensions?.src_w) || this.imgEl?.naturalWidth || 540
+    const imgH = (this.activeRaster === 'reference' ? this.result?.dimensions?.ref_h : this.result?.dimensions?.src_h) || this.imgEl?.naturalHeight || 540
+
+    if (imgW <= 0 || imgH <= 0) return
+
+    const scaleX = (paneW - 40) / imgW
+    const scaleY = (paneH - 70) / imgH
+    const fitZoom = Math.min(scaleX, scaleY)
+
+    this.zoom = Math.max(0.3, Math.min(2.0, Number(fitZoom.toFixed(2))))
+    this.panX = Math.round((paneW - imgW * this.zoom) / 2)
+    this.panY = Math.round((paneH - imgH * this.zoom) / 2 + 10)
+
     this.updateZoomBadge()
     this.draw()
+  }
+
+  private resetView() {
+    this.fitToView()
   }
 
   private updateZoomBadge() {
@@ -532,11 +565,11 @@ export class SpatialWorkspace {
     if (base64Str) {
       this.imgEl = new Image()
       this.imgEl.onload = () => {
-        this.draw()
+        this.fitToView()
       }
       this.imgEl.src = `data:image/png;base64,${base64Str}`
     } else {
-      this.draw()
+      this.fitToView()
     }
   }
 

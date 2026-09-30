@@ -2836,6 +2836,62 @@ body::before {
   cursor: crosshair;
 }
 
+.ws-judges-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(2, 6, 23, 0.90);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  backdrop-filter: blur(12px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  z-index: 25;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.ws-judges-badge {
+  background: rgba(56, 189, 248, 0.18);
+  color: var(--cyan-bright);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+
+.ws-judges-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.ws-judges-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.ws-judges-item .inlier-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.ws-judges-item .outlier-dot {
+  background: #f43f5e;
+  box-shadow: 0 0 6px #f43f5e;
+}
+
 .ws-image-pane {
   flex: 1;
   position: relative;
