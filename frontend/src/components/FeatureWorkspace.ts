@@ -86,6 +86,15 @@ export class FeatureWorkspace {
     }
   }
 
+  public onTabActive() {
+    this.fitCanvasSizes()
+    if (!this.result && this.currentState !== 'processing') {
+      this.runMatching()
+    } else {
+      this.drawAll()
+    }
+  }
+
   private render() {
     this.rootEl = document.createElement('div')
     this.rootEl.className = 'feature-workspace-root'

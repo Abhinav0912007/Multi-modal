@@ -62,6 +62,15 @@ export class SpatialWorkspace {
     }
   }
 
+  public onTabActive() {
+    this.fitCanvas()
+    if (!this.result && !this.isLoading) {
+      this.runAnalysis()
+    } else {
+      this.draw()
+    }
+  }
+
   private render() {
     this.rootEl = document.createElement('div')
     this.rootEl.className = 'spatial-workspace-root'

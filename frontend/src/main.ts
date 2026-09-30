@@ -334,9 +334,11 @@ function switchTab(tab: ActiveTab) {
   }
   if (tab === 'feature-correspondence') {
     featureWorkspace.setActivePair(state.systemStatus.activePair)
+    featureWorkspace.onTabActive()
   }
   if (tab === 'spatial-analysis') {
     spatialWorkspace.setActivePair(state.systemStatus.activePair)
+    spatialWorkspace.onTabActive()
   }
   if (tab === 'alignment-studio') {
     alignmentStudio.setActivePair(state.systemStatus.activePair)
