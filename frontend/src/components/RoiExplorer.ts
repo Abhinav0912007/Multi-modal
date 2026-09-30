@@ -58,12 +58,19 @@ export class RoiExplorer {
 
   public onTabActive() {
     if (this.viewer) {
+      this.viewer.setActive(true)
       setTimeout(() => {
         this.viewer.resizeCanvases()
         this.viewer.centerOnRoi()
       }, 50)
     }
     this.handlePreviewRoi()
+  }
+
+  public onTabInactive() {
+    if (this.viewer) {
+      this.viewer.setActive(false)
+    }
   }
 
   public getCoordinates(): RoiCoordinates {

@@ -366,7 +366,13 @@ def read_reference_image(tif_path, roi=None):
                         patch = patch[:, :, 0]
                     return patch, (shape, dtype)
                 else:
-                    return page.asarray(), (shape, dtype)
+                    try:
+                        mmap = tifffile.memmap(tif_path, mode="r")
+                        if len(mmap.shape) == 3:
+                            mmap = mmap[:, :, 0]
+                        return mmap, (shape, dtype)
+                    except Exception:
+                        return page.asarray(out="memmap"), (shape, dtype)
         except Exception as err:
             print(f"[Reference Reader] Error reading TIFF: {err}")
             raise

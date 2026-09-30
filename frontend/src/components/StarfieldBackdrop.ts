@@ -185,8 +185,25 @@ export class StarfieldBackdrop {
     }
   }
 
+  private isPaused: boolean = false
+
+  private onVisibilityChange = () => {
+    if (document.hidden) {
+      this.isPaused = true
+      if (this.animId !== null) {
+        cancelAnimationFrame(this.animId)
+        this.animId = null
+      }
+    } else {
+      this.isPaused = false
+      this.startLoop()
+    }
+  }
+
   private startLoop() {
+    if (this.animId !== null || this.isPaused) return
     const loop = (timestamp: number) => {
+      if (this.isPaused) return
       // Throttle rendering to ~24 fps for zero CPU impact while maintaining smooth twinkling
       if (timestamp - this.lastTick >= 40) {
         this.renderFrame(timestamp)
@@ -195,12 +212,14 @@ export class StarfieldBackdrop {
       this.animId = requestAnimationFrame(loop)
     }
     this.animId = requestAnimationFrame(loop)
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
   }
 
   public destroy() {
     if (this.animId !== null) {
       cancelAnimationFrame(this.animId)
     }
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
     window.removeEventListener('resize', this.onResize)
     this.canvas.remove()
   }

@@ -362,6 +362,12 @@ function switchTab(tab: ActiveTab) {
   viewExport.style.display = tab === 'export-workspace' ? 'flex' : 'none'
   viewJobCenter.style.display = tab === 'job-center' ? 'flex' : 'none'
 
+  if (tab === 'mission-control') {
+    lunarHero.resume()
+  } else {
+    lunarHero.pause()
+  }
+
   if (tab === 'roi-explorer') {
     roiExplorer.setActivePair(state.systemStatus.activePair)
     roiExplorer.onTabActive()

@@ -10,6 +10,7 @@ from backend.services.pair_discovery import get_pair_paths
 
 roi_router = APIRouter(prefix="/roi", tags=["v1-roi"])
 preview_router = APIRouter(prefix="/preview", tags=["v1-preview"])
+raster_router = APIRouter(prefix="/raster", tags=["v1-raster"])
 
 
 @roi_router.post("/crop", response_model=ROICropResponse)
@@ -41,11 +42,15 @@ def get_roi_preview_image(
     xmax: int = Query(4000),
     max_dim: int = Query(1024),
 ):
-    """Streams a dynamic PNG preview of the specified ROI."""
+    """Streams a dynamic PNG preview of the specified ROI with browser caching."""
     try:
         roi = (ymin, ymax, xmin, xmax)
         png_data = roi_service.get_roi_preview_png(pair_id, target, roi, max_dim=max_dim)
-        return Response(content=png_data, media_type="image/png")
+        return Response(
+            content=png_data,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"}
+        )
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -61,6 +66,38 @@ def get_image_preview(
         paths = get_pair_paths(pair_id)
         file_path = paths["source"] if target == "source" else paths["reference"]
         png_data = raster_service.get_preview_png(file_path, max_dim=max_dim)
-        return Response(content=png_data, media_type="image/png")
+        return Response(
+            content=png_data,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400, immutable"}
+        )
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@raster_router.get("/tile/{pair_id}/{target}/{z}/{x}/{y}")
+def get_raster_tile(
+    pair_id: str,
+    target: str,
+    z: int,
+    x: int,
+    y: int,
+    tile_size: int = Query(256, ge=64, le=1024)
+):
+    """
+    Progressive pyramid tile streaming endpoint.
+    Returns a 256x256 image tile directly from multi-gigabyte lunar rasters.
+    Prevents large file downloads in the browser.
+    """
+    try:
+        paths = get_pair_paths(pair_id)
+        file_path = paths["source"] if target == "source" else paths["reference"]
+        png_data = raster_service.get_tile_png(file_path, z=z, x=x, y=y, tile_size=tile_size)
+        return Response(
+            content=png_data,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400, immutable"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+

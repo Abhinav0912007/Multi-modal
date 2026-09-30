@@ -61,6 +61,11 @@ export class LunarHero {
   private scLonText = '00°00\'00" E'
   private scAltText = '100.2 km'
 
+  // Performance & lifecycle
+  private isPaused: boolean = false
+  private isVisible: boolean = true
+  private observer: IntersectionObserver | null = null
+
   constructor(container: HTMLElement) {
     this.container = container
 
@@ -89,7 +94,40 @@ export class LunarHero {
     this.initCanvas()
     this.initStars()
     this.setupEvents()
+    this.setupIntersectionObserver()
     this.render()
+  }
+
+  private setupIntersectionObserver() {
+    if (typeof IntersectionObserver !== 'undefined') {
+      this.observer = new IntersectionObserver((entries) => {
+        const entry = entries[0]
+        if (entry) {
+          this.isVisible = entry.isIntersecting
+          if (!this.isVisible) {
+            this.pause()
+          } else {
+            this.resume()
+          }
+        }
+      }, { threshold: 0.05 })
+      this.observer.observe(this.container)
+    }
+  }
+
+  public pause() {
+    this.isPaused = true
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
+    }
+  }
+
+  public resume() {
+    if (this.isPaused && this.isVisible) {
+      this.isPaused = false
+      this.render()
+    }
   }
 
   private initThree() {
@@ -407,7 +445,9 @@ export class LunarHero {
     // 7. Draw Precision Optical Reticle & Scientific Axis Overlays
     this.drawReticleOverlay(cx, cy, radius)
 
-    this.animationFrameId = requestAnimationFrame(this.render)
+    if (!this.isPaused) {
+      this.animationFrameId = requestAnimationFrame(this.render)
+    }
   }
 
   private drawStarfield(cx: number, cy: number, radius: number) {

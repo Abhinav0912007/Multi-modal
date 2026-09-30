@@ -316,18 +316,25 @@ export class ScientificImageViewer {
     }
   }
 
+  private needsRender: boolean = false
+
   private startRenderLoop() {
-    const loop = () => {
-      if (this.isDestroyed) return
-      this.render()
-      this.drawRulers()
-      this.animFrameId = requestAnimationFrame(loop)
-    }
-    this.animFrameId = requestAnimationFrame(loop)
+    this.requestRender()
   }
 
   public requestRender() {
-    // Loop renders continuously via requestAnimationFrame
+    if (this.isDestroyed || (this.canvas && this.canvas.offsetParent === null)) return
+    if (this.needsRender) return
+    this.needsRender = true
+    this.animFrameId = requestAnimationFrame(() => {
+      this.needsRender = false
+      if (this.isDestroyed) return
+      this.render()
+      this.drawRulers()
+      if (this.isPanning || this.isDraggingSplitter) {
+        this.requestRender()
+      }
+    })
   }
 
   private render() {

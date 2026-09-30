@@ -958,18 +958,44 @@ export class RoiCanvasViewer {
     if (graphicEl) graphicEl.style.width = `${screenWidthPx}px`
   }
 
+  private isActive: boolean = true
+  private needsRedraw: boolean = false
+
+  public setActive(active: boolean) {
+    this.isActive = active
+    if (active) {
+      this.requestRedraw()
+    } else if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
+      this.needsRedraw = false
+    }
+  }
+
   private startRenderLoop() {
-    const loop = () => {
+    // Initial draw
+    this.requestRedraw()
+  }
+
+  public requestRedraw() {
+    // Skip rendering if hidden or destroyed
+    if (!this.isActive || (this.viewportEl && this.viewportEl.offsetParent === null)) {
+      return
+    }
+    if (this.needsRedraw) return
+
+    this.needsRedraw = true
+    this.animationFrameId = requestAnimationFrame(() => {
+      this.needsRedraw = false
       this.pulsePhase += 0.03
       this.draw()
       this.drawRulers()
-      this.animationFrameId = requestAnimationFrame(loop)
-    }
-    this.animationFrameId = requestAnimationFrame(loop)
-  }
 
-  private requestRedraw() {
-    // Redraw scheduled in next animation frame
+      // If active drag/pan or compare mode interaction, keep frame rate responsive
+      if (this.isDraggingRoi || this.activeHandle !== null || this.isPanning || this.isDraggingSplitter) {
+        this.requestRedraw()
+      }
+    })
   }
 
   // =========================================================================

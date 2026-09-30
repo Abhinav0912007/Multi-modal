@@ -53,4 +53,5 @@ Thumbs.db
 *.db
 *.sqlite3
 data/*.db
+data/cache/
 

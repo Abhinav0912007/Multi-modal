@@ -46,7 +46,7 @@ def list_dataset_pairs():
 def get_pair_detail(pair_id: str):
     """Retrieves pair metadata, source/reference paths, and default ROIs."""
     pairs = discover_pairs()
-    matched = next((p for p in pairs if p["pair_id"] == pair_id), None)
+    matched = next((p for p in pairs if p.get("pair_id") == pair_id or p.get("id") == pair_id), None)
     if not matched:
         raise HTTPException(status_code=404, detail=f"Pair '{pair_id}' not found")
     return matched
