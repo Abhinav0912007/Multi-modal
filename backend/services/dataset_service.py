@@ -491,3 +491,28 @@ def get_dataset_summary_stats() -> Dict[str, Any]:
         "product_types": product_types,
         "statuses": statuses
     }
+
+
+class DatasetService:
+    """Service wrapper for managing the ISRO Lunar Dataset Catalog."""
+
+    def search_datasets(
+        self,
+        query: Optional[str] = None,
+        mission: Optional[str] = None,
+        instrument: Optional[str] = None,
+        product_type: Optional[str] = None,
+        status: Optional[str] = None,
+        year_preset: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return get_all_datasets(query, mission, instrument, product_type, status, year_preset)
+
+    def get_dataset_by_id(self, product_id: str) -> Optional[Dict[str, Any]]:
+        return get_dataset_by_id(product_id)
+
+    def get_dataset_summary_stats(self) -> Dict[str, Any]:
+        return get_dataset_summary_stats()
+
+
+dataset_service = DatasetService()
+

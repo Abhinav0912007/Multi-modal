@@ -405,3 +405,25 @@ def read_reference_image(tif_path, roi=None):
             return patch, ((h, w), dtype)
         return img, ((h, w), dtype)
 
+
+class PDSReader:
+    """Universal reader abstraction for PDS3, PDS4, GeoTIFF, and standard scientific lunar rasters."""
+
+    @staticmethod
+    def read(file_path, roi=None):
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in (".tif", ".tiff"):
+            return read_reference_image(file_path, roi=roi)
+        else:
+            roi_lines = (roi[0], roi[1]) if roi else None
+            roi_samples = (roi[2], roi[3]) if roi else None
+            arr, shape_info = read_pds_image(file_path, roi_lines=roi_lines, roi_samples=roi_samples)
+            if hasattr(arr, "shape"):
+                h, w = arr.shape[:2]
+                dtype = arr.dtype
+            else:
+                h, w = shape_info[0], shape_info[1]
+                dtype = shape_info[2]
+            return arr, {"shape": (h, w), "dtype": str(dtype)}
+
+

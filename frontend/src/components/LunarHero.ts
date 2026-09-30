@@ -28,7 +28,7 @@ export class LunarHero {
   private renderer!: THREE.WebGLRenderer
   private moonMesh!: THREE.Mesh
   private pointLight!: THREE.PointLight
-  private readonly moonRadius3D = 8.0
+  private readonly moonRadius3D = 8.5
   private readonly cameraDist = 25.0
 
   // Rotation and interaction
@@ -106,45 +106,86 @@ export class LunarHero {
     this.renderer.domElement.style.width = '100%'
     this.renderer.domElement.style.height = '100%'
 
-    // Deep space ambient illumination
-    const ambientLight = new THREE.AmbientLight(0x1e293b, 0.6)
-    this.scene.add(ambientLight)
+    // 1. Primary Directional Sunlight (intense, photorealistic solar rays from deep space)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.6)
+    sunLight.position.set(-45, 25, 35)
+    this.scene.add(sunLight)
 
-    // Main PointLight matching the CodePen realistic moon lighting
-    this.pointLight = new THREE.PointLight(0xffffff, 2.4, 500)
-    this.pointLight.position.set(-200, 50, 150)
+    // 2. Interactive Cursor Point Light (highlights crater rims dynamically without distance decay)
+    this.pointLight = new THREE.PointLight(0xffffff, 1.8, 0, 0)
+    this.pointLight.position.set(-20, 15, 25)
     this.scene.add(this.pointLight)
 
-    // Deep-space subtle cyan rim light
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.4)
-    rimLight.position.set(100, -80, -60)
+    // 3. Ambient Illumination (Earthshine & cosmic scatter so craters on dark side stay clearly visible)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45)
+    this.scene.add(ambientLight)
+
+    // 4. Directional Rim Light (ISRO cyan rim glow along the lunar limb)
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.85)
+    rimLight.position.set(50, -30, -25)
     this.scene.add(rimLight)
 
     // High definition 3D Moon sphere geometry
     const geometry = new THREE.SphereGeometry(this.moonRadius3D, 64, 64)
 
-    // Normal mapped lunar material
+    // Normal mapped lunar material with vivid albedo and crater relief
     const material = new THREE.MeshPhongMaterial({
-      color: 0xcccccc,
-      shininess: 2,
-      specular: 0x111111
+      color: 0xffffff,
+      shininess: 6,
+      specular: 0x333333
     })
 
     const texLoader = new THREE.TextureLoader()
-    const onTextureLoaded = (tex: THREE.Texture) => {
-      tex.wrapS = THREE.RepeatWrapping
-      tex.wrapT = THREE.ClampToEdgeWrapping
-      material.normalMap = tex
-      material.normalScale = new THREE.Vector2(1.8, 1.8)
-      material.needsUpdate = true
-    }
 
-    texLoader.load('/moon_normal.png', onTextureLoaded, undefined, () => {
-      texLoader.load(
-        'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/i/06a094a4-7bd7-4bb9-b998-6c1e17f66c08/dbcju0k-b9b333e1-dd8d-4657-90db-7d3e7e179843.png',
-        onTextureLoaded
-      )
-    })
+    // 1. Albedo diffuse map (NASA lunar surface)
+    texLoader.load(
+      '/moon_map.jpg',
+      (tex) => {
+        tex.wrapS = THREE.RepeatWrapping
+        tex.wrapT = THREE.ClampToEdgeWrapping
+        tex.colorSpace = THREE.SRGBColorSpace
+        material.map = tex
+        material.needsUpdate = true
+      },
+      undefined,
+      () => {
+        texLoader.load(
+          'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/moon_1024.jpg',
+          (tex) => {
+            tex.wrapS = THREE.RepeatWrapping
+            tex.wrapT = THREE.ClampToEdgeWrapping
+            tex.colorSpace = THREE.SRGBColorSpace
+            material.map = tex
+            material.needsUpdate = true
+          }
+        )
+      }
+    )
+
+    // 2. High-resolution Normal bump map
+    texLoader.load(
+      '/moon_normal.png',
+      (tex) => {
+        tex.wrapS = THREE.RepeatWrapping
+        tex.wrapT = THREE.ClampToEdgeWrapping
+        material.normalMap = tex
+        material.normalScale = new THREE.Vector2(2.2, 2.2)
+        material.needsUpdate = true
+      },
+      undefined,
+      () => {
+        texLoader.load(
+          'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/i/06a094a4-7bd7-4bb9-b998-6c1e17f66c08/dbcju0k-b9b333e1-dd8d-4657-90db-7d3e7e179843.png',
+          (tex) => {
+            tex.wrapS = THREE.RepeatWrapping
+            tex.wrapT = THREE.ClampToEdgeWrapping
+            material.normalMap = tex
+            material.normalScale = new THREE.Vector2(2.2, 2.2)
+            material.needsUpdate = true
+          }
+        )
+      }
+    )
 
     this.moonMesh = new THREE.Mesh(geometry, material)
     this.scene.add(this.moonMesh)
@@ -207,8 +248,9 @@ export class LunarHero {
       const relX = (e.clientX - rect.left) / (rect.width || 1)
       const relY = (e.clientY - rect.top) / (rect.height || 1)
       if (this.pointLight) {
-        this.pointLight.position.x = (relX * 2 - 1) * 200
-        this.pointLight.position.y = (-(relY * 2 - 1)) * 120
+        this.pointLight.position.x = (relX * 2 - 1) * 25
+        this.pointLight.position.y = (-(relY * 2 - 1)) * 18
+        this.pointLight.position.z = 22
       }
 
       // Drag to rotate
@@ -305,15 +347,22 @@ export class LunarHero {
     const cx = w * 0.48
     const cy = h * 0.50
 
-    // Synchronize 3D camera so Three.js 3D Moon sphere exactly aligns with (cx, cy)
+    // Synchronize 3D camera and mesh so Three.js 3D Moon sphere exactly aligns with (cx, cy)
     const fovHalfRad = (this.camera.fov * Math.PI) / 360
     const visibleHalfHeight = this.cameraDist * Math.tan(fovHalfRad)
     const pxPerUnit = (h / 2) / visibleHalfHeight
     const radius = this.moonRadius3D * pxPerUnit
 
-    this.camera.position.x = -((cx - w / 2) / pxPerUnit)
-    this.camera.position.y = ((cy - h / 2) / pxPerUnit)
-    this.camera.lookAt(-((cx - w / 2) / pxPerUnit), ((cy - h / 2) / pxPerUnit), 0)
+    const moon3DX = (cx - w / 2) / pxPerUnit
+    const moon3DY = -(cy - h / 2) / pxPerUnit
+    if (this.moonMesh) {
+      this.moonMesh.position.set(moon3DX, moon3DY, 0)
+      this.moonMesh.rotation.y = this.rotY
+      this.moonMesh.rotation.x = this.rotX
+    }
+
+    this.camera.position.set(0, 0, this.cameraDist)
+    this.camera.lookAt(0, 0, 0)
 
     // Update rotation
     if (this.autoRotate && !this.isDragging) {
@@ -321,19 +370,24 @@ export class LunarHero {
     }
     this.orbitAngle = (this.orbitAngle + this.ORBIT_SPEED) % (Math.PI * 2)
 
-    if (this.moonMesh) {
-      this.moonMesh.rotation.y = this.rotY
-      this.moonMesh.rotation.x = this.rotX
-    }
-
     // 1. Render realistic Three.js 3D Moon
     this.renderer.render(this.scene, this.camera)
 
     // 2. Clear 2D overlay canvas for overlays
     this.ctx.clearRect(0, 0, w, h)
 
-    // 3. Draw Starfield
-    this.drawStarfield()
+    // 3. Draw Starfield (omits stars behind the lunar sphere)
+    this.drawStarfield(cx, cy, radius)
+
+    // 3b. Soft outer lunar atmosphere / corona glow
+    const glowGrad = this.ctx.createRadialGradient(cx, cy, radius * 0.96, cx, cy, radius * 1.08)
+    glowGrad.addColorStop(0, 'rgba(56, 189, 248, 0.20)')
+    glowGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.07)')
+    glowGrad.addColorStop(1, 'rgba(56, 189, 248, 0)')
+    this.ctx.fillStyle = glowGrad
+    this.ctx.beginPath()
+    this.ctx.arc(cx, cy, radius * 1.08, 0, Math.PI * 2)
+    this.ctx.fill()
 
     // 4. Draw Coordinate / Grid Overlay
     if (this.showGrid) {
@@ -356,8 +410,13 @@ export class LunarHero {
     this.animationFrameId = requestAnimationFrame(this.render)
   }
 
-  private drawStarfield() {
+  private drawStarfield(cx: number, cy: number, radius: number) {
+    const pad = radius + 2
     for (const star of this.stars) {
+      // Do not draw stars directly behind or on top of the moon disc
+      const dist = Math.hypot(star.x - cx, star.y - cy)
+      if (dist < pad) continue
+
       star.alpha += (Math.random() - 0.5) * star.twinkleSpeed
       if (star.alpha > star.baseAlpha + 0.3) star.alpha = star.baseAlpha + 0.3
       if (star.alpha < star.baseAlpha - 0.2) star.alpha = star.baseAlpha - 0.2

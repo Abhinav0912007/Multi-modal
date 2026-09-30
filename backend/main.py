@@ -9,11 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import CORS_ORIGINS
 from backend.routers import pairs, artifacts, terrain, pipeline, preview, datasets, features, spatial, alignment, transformation
+from backend.routers.v1 import api_v1_router
 
 app = FastAPI(
     title="Chandrayaan-1 TMC Registration API",
-    description="Backend API for the Lunar Image Registration System",
-    version="2.0.0",
+    description="Backend API for the Lunar Image Registration System with /api/v1 versioning and job-based asynchronous processing",
+    version="2.1.0",
 )
 
 # CORS
@@ -28,7 +29,10 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app" if not is_wildcard else None,
 )
 
-# Mount routers
+# 1. Mount API Version 1 Router (/api/v1/...)
+app.include_router(api_v1_router)
+
+# 2. Mount Legacy Routers for Frontend Backward Compatibility (/api/...)
 app.include_router(pairs.router)
 app.include_router(datasets.router)
 app.include_router(artifacts.router)
@@ -42,5 +46,12 @@ app.include_router(transformation.router)
 
 
 @app.get("/api/health")
+@app.get("/api/v1/health")
 def health():
-    return {"status": "ok", "service": "chandracrawl-backend"}
+    return {
+        "status": "ok",
+        "service": "chandracrawl-backend",
+        "version": "2.1.0",
+        "api_v1": "/api/v1"
+    }
+

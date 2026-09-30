@@ -162,3 +162,27 @@ def create_checkerboard(img1, img2, square_size=128):
                 out[y:y_end, x:x_end] = gray2[y:y_end, x:x_end]
     return out
 
+
+class ResultVisualizer:
+    """Convenience class for rendering alignment verification images."""
+
+    @staticmethod
+    def create_alpha_blend(img1, img2, alpha=0.5):
+        blend, _ = create_blended_overlay(img2, img1, alpha=alpha)
+        return blend
+
+    @staticmethod
+    def create_difference_map(img1, img2):
+        h = min(img1.shape[0], img2.shape[0])
+        w = min(img1.shape[1], img2.shape[1])
+        g1 = img1[:h, :w] if len(img1.shape) == 2 else cv2.cvtColor(img1[:h, :w], cv2.COLOR_BGR2GRAY)
+        g2 = img2[:h, :w] if len(img2.shape) == 2 else cv2.cvtColor(img2[:h, :w], cv2.COLOR_BGR2GRAY)
+        return cv2.absdiff(g1, g2)
+
+    @staticmethod
+    def create_checkerboard(img1, img2, grid_size=(8, 8)):
+        h = min(img1.shape[0], img2.shape[0])
+        sq = max(16, h // max(1, grid_size[0]))
+        return create_checkerboard(img1, img2, square_size=sq)
+
+

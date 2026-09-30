@@ -65,3 +65,21 @@ def preprocess_image(raw_array, p_low=1.0, p_high=99.0, clip_limit=2.5, tile_gri
     enhanced_8u = apply_lunar_clahe(norm_8u, clip_limit=clip_limit, tile_grid_size=tile_grid)
 
     return enhanced_8u
+
+
+class ImagePreprocessor:
+    """Preprocesses raw lunar raster arrays using normalization, optional denoising, and CLAHE."""
+
+    def __init__(self, clip_limit: float = 2.5, tile_grid_size: tuple = (8, 8), denoise: bool = False):
+        self.clip_limit = clip_limit
+        self.tile_grid_size = tile_grid_size
+        self.denoise = denoise
+
+    def process(self, arr: np.ndarray) -> np.ndarray:
+        return preprocess_image(
+            arr,
+            clip_limit=self.clip_limit,
+            tile_grid=self.tile_grid_size,
+            denoise=self.denoise
+        )
+

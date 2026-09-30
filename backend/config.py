@@ -11,6 +11,7 @@ PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 PAIRS_DIR = os.path.join(DATA_DIR, "pairs")
 OUTPUTS_DIR = os.path.join(PROJECT_ROOT, "outputs")
+ARTIFACTS_DIR = OUTPUTS_DIR
 
 # Ensure output directory exists
 os.makedirs(OUTPUTS_DIR, exist_ok=True)

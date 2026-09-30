@@ -235,3 +235,42 @@ def get_pair_detail(pair_id: str) -> dict:
     return inspect_pair(pair_path, pair_id)
 
 
+def discover_pairs() -> list[dict]:
+    """Alias for get_available_pairs."""
+    return get_available_pairs()
+
+
+def get_pair_paths(pair_id: str) -> dict:
+    """Returns primary source and reference file paths for a dataset pair."""
+    pair_dir = os.path.join(PAIRS_DIR, pair_id)
+    source_dir = os.path.join(pair_dir, "source")
+    ref_dir = os.path.join(pair_dir, "reference")
+    if not os.path.exists(ref_dir):
+        ref_dir = os.path.join(pair_dir, "refrence")
+
+    # Discover source file
+    src_file = None
+    if os.path.exists(source_dir):
+        for f in os.listdir(source_dir):
+            if f.lower().endswith((".img", ".tif", ".tiff", ".png", ".jpg", ".qub")):
+                src_file = os.path.join(source_dir, f)
+                break
+
+    # Discover reference file
+    ref_file = None
+    if os.path.exists(ref_dir):
+        for f in os.listdir(ref_dir):
+            if f.lower().endswith((".tif", ".tiff", ".img", ".png", ".jpg")):
+                ref_file = os.path.join(ref_dir, f)
+                break
+
+    return {
+        "pair_id": pair_id,
+        "source": src_file or os.path.join(source_dir, "source.tif"),
+        "reference": ref_file or os.path.join(ref_dir, "reference.tif"),
+        "source_dir": source_dir,
+        "reference_dir": ref_dir,
+    }
+
+
+
