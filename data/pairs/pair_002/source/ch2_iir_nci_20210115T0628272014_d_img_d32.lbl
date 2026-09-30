@@ -1,0 +1,23 @@
+PDS_VERSION_ID                 = PDS3
+
+/* FILE CHARACTERISTICS */
+RECORD_TYPE                    = FIXED_LENGTH
+RECORD_BYTES                   = 4416
+FILE_RECORDS                   = 358973
+LABEL_RECORDS                  = 1
+^IMAGE                         = "ch2_iir_nci_20210115T0628272014_d_img_d32.qub"
+
+/* DATA IDENTIFICATION */
+DATA_SET_ID                    = "CHANDRAYAAN-2-L-IIRS-2-EDR-V1.0"
+PRODUCT_ID                     = "ch2_iir_nci_20210115T0628272014_d_img_d32"
+INSTRUMENT_NAME                = "IIRS"
+TARGET_NAME                    = "MOON"
+
+/* DATA OBJECT */
+OBJECT                         = IMAGE
+  LINES                        = 358973
+  LINE_SAMPLES                 = 1104
+  SAMPLE_BITS                  = 32
+  SAMPLE_TYPE                  = PC_REAL
+END_OBJECT                     = IMAGE
+END

@@ -1,7 +1,25 @@
-# Ignore data directory and large data files
-data/
+# Large raw mission rasters (Multi-GB files exceeding GitHub limits)
+*.img
+*.IMG
+*.qub
+*.QUB
+*.cub
+*.tif
+*.tiff
+*.TIF
+*.TIFF
+*.tar
+*.tar.gz
+*.zip
 data.zip
 outputs/
+
+# Node dependencies & builds
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.vite/
 
 # Python cache
 __pycache__/
@@ -11,7 +29,6 @@ __pycache__/
 .Python
 *.egg
 *.egg-info/
-dist/
 build/
 *.so
 
@@ -31,3 +48,4 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+
