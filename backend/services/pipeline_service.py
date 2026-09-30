@@ -55,13 +55,10 @@ def run_pipeline(config, progress_callback=None):
     out_dir = os.path.join(OUTPUTS_DIR, config.pair_id)
     os.makedirs(out_dir, exist_ok=True)
 
-    if config.pair_id == "pair_002":
-        raise RuntimeError("IIRS spectral cube requires band extraction before 2D registration.")
-
     t_start = time.time()
 
     # ── Step 1: Discover Source ──────────────────────────────────────
-    report(1, 10, "Discovering & inspecting source archive (.img / .tar)...")
+    report(1, 10, "Discovering & inspecting source archive (.img / .tar / 2D band)...")
     tar_path = discover_tar_file(source_dir)
     extracted_dir = os.path.join(source_dir, "extracted")
     if tar_path:
@@ -69,7 +66,11 @@ def run_pipeline(config, progress_callback=None):
             extract_tar_bundle(tar_path, extracted_dir)
         src_img_path, src_meta_path = scan_for_pds_data(extracted_dir)
     else:
-        src_img_path, src_meta_path = scan_for_pds_data(source_dir)
+        source_tif_candidate = os.path.join(source_dir, "source.tif")
+        if os.path.exists(source_tif_candidate):
+            src_img_path, src_meta_path = source_tif_candidate, None
+        else:
+            src_img_path, src_meta_path = scan_for_pds_data(source_dir)
 
     # ── Step 2: Discover Reference ───────────────────────────────────
     report(2, 20, "Scanning reference GeoTIFF...")
@@ -87,11 +88,15 @@ def run_pipeline(config, progress_callback=None):
     roi_ref = config.roi_ref
     report(3, 30, f"Memory-mapping source & reference patches (ROI: {roi_src}, {roi_ref})...")
 
-    src_patch, (src_lines, src_samples, src_dtype) = read_pds_image(
-        src_img_path, metadata_path=src_meta_path,
-        roi_lines=(roi_src[0], roi_src[1]),
-        roi_samples=(roi_src[2], roi_src[3])
-    )
+    if src_img_path and src_img_path.lower().endswith((".tif", ".tiff", ".png", ".jpg")):
+        src_patch, (src_shape, src_dtype) = read_reference_image(src_img_path, roi=roi_src)
+        src_lines, src_samples = src_shape[:2]
+    else:
+        src_patch, (src_lines, src_samples, src_dtype) = read_pds_image(
+            src_img_path, metadata_path=src_meta_path,
+            roi_lines=(roi_src[0], roi_src[1]),
+            roi_samples=(roi_src[2], roi_src[3])
+        )
     ref_patch, (ref_shape, ref_dtype) = read_reference_image(ref_tif_path, roi=roi_ref)
 
     # ── Step 4: Preprocessing (CLAHE + Percentile) ───────────────────

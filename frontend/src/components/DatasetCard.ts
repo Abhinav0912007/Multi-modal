@@ -148,26 +148,26 @@ export class DatasetCard {
         </div>
 
         ${p.id === 'pair_002' || instrument === 'IIRS' ? `
-          <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; color: #fde68a;">
-            ⚠ <b>IIRS spectral cube requires band extraction before 2D registration.</b>
+          <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; color: #a7f3d0; margin-bottom: 8px;">
+            ✓ <b>IIRS 2D Continuum Band (1580nm) Extracted & Ready for Registration.</b>
           </div>
-        ` : `
-          <!-- Sensor Parameters Sub-panel -->
-          <div style="background: rgba(5, 11, 26, 0.7); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
-            <div style="display:flex; justify-content:space-between;">
-              <span style="color:var(--text-muted);">GSD (Source):</span>
-              <span style="color:#fff;">${instrument === 'OHRC' ? '0.25 m/px' : instrument === 'IIRS' ? '80.0 m/px' : '5.0 m/px'}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between;">
-              <span style="color:var(--text-muted);">Swath Width:</span>
-              <span style="color:#fff;">${instrument === 'OHRC' ? '12,000 px' : instrument === 'IIRS' ? '1,104 channels' : '4,000 px'}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between;">
-              <span style="color:var(--text-muted);">Spectral Band:</span>
-              <span style="color:#fff;">${instrument === 'OHRC' ? '450 – 900 nm (Optical)' : instrument === 'IIRS' ? '0.8 – 5.0 µm (Hyperspectral)' : '500 – 850 nm (Panchromatic)'}</span>
-            </div>
+        ` : ''}
+
+        <!-- Sensor Parameters Sub-panel -->
+        <div style="background: rgba(5, 11, 26, 0.7); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:var(--text-muted);">GSD (Source):</span>
+            <span style="color:#fff;">${instrument === 'OHRC' ? '0.25 m/px' : instrument === 'IIRS' ? '80.0 m/px' : '5.0 m/px'}</span>
           </div>
-        `}
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:var(--text-muted);">Swath Width:</span>
+            <span style="color:#fff;">${instrument === 'OHRC' ? '12,000 px' : instrument === 'IIRS' ? '1,104 channels' : '4,000 px'}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:var(--text-muted);">Spectral Band:</span>
+            <span style="color:#fff;">${instrument === 'OHRC' ? '450 – 900 nm (Optical)' : instrument === 'IIRS' ? '0.8 – 5.0 µm (Hyperspectral)' : '500 – 850 nm (Panchromatic)'}</span>
+          </div>
+        </div>
 
         <!-- Catalog Jump Button -->
         <button id="btn-browse-catalog" class="hud-btn" style="width:100%; justify-content:center; padding:8px 12px; margin-top:4px;">

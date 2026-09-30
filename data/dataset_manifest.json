@@ -40,7 +40,7 @@
         "product_type": "NAC",
         "filename": "M1536201804CC.IMG"
       },
-      "status": "requires_band_extraction",
+      "status": "pending_validation",
       "reference_status": "UNKNOWN",
       "reference_status_label": "Reference geographic overlap: NOT YET VERIFIED"
     },

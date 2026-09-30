@@ -125,9 +125,9 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
         instrument = "IIRS"
         instrument_name = "Chandrayaan-2 IIRS"
         product_type = "hyperspectral_cube"
-        source_dims = {"lines": 358973, "samples": 1104}
-        status = "requires_band_extraction"
-        status_label = "Requires spectral band extraction"
+        source_dims = {"lines": 4000, "samples": 1104}
+        status = "pending_validation"
+        status_label = "2D Band Extracted (Continuum 1580nm)"
     elif "ch1_tmc" in src_lower or "tmc" in src_lower or manifest_entry.get("instrument") == "TMC":
         mission = "Chandrayaan-1"
         instrument = "TMC"

@@ -87,43 +87,6 @@ def match_features(req: FeatureMatchRequest):
     # 1. Discover and validate pair metadata
     pair_info = get_pair_detail(req.pair_id)
 
-    # BLOCK INVALID IIRS HYPERSPECTRAL MATCHING (Phase 4)
-    if req.pair_id == "pair_002" or pair_info.get("instrument") == "IIRS":
-        return {
-            "status": "requires_band_extraction",
-            "validation_state": "INVALID",
-            "validation_reason": "IIRS spectral cube requires band extraction before 2D registration.",
-            "is_statistically_valid": False,
-            "message": "IIRS spectral cube requires band extraction before 2D registration.",
-            "instrument": pair_info.get("instrument", "IIRS"),
-            "mission": pair_info.get("mission", "Chandrayaan-2"),
-            "source_filename": pair_info.get("source_filename", "ch2_iir_nci_20210115T0628272014_d_img_d32.qub"),
-            "reference_filename": pair_info.get("reference_filename", "M1536201804CC.IMG"),
-            "reference_status_label": pair_info.get("reference_status_label", "Reference geographic overlap: NOT YET VERIFIED"),
-            "source_dimensions": [358973, 1104],
-            "reference_dimensions": [10000, 704],
-            "source_image": None,
-            "reference_image": None,
-            "source_keypoints": [],
-            "reference_keypoints": [],
-            "matches": [],
-            "stats": {
-                "source_features_count": 0,
-                "reference_features_count": 0,
-                "candidate_matches_count": 0,
-                "verified_matches_count": 0,
-                "inliers_count": 0,
-                "outliers_count": 0,
-                "inlier_ratio": 0.0,
-                "mean_reprojection_error": 0.0,
-                "rmse": 0.0,
-                "rmse_formatted": "N/A (Requires band extraction)",
-                "spatial_coverage": 0.0,
-                "validation_state": "INVALID",
-                "validation_reason": "IIRS spectral cube requires band extraction before 2D registration."
-            }
-        }
-
     # Discover source data
     tar_path = discover_tar_file(source_dir)
     extracted_dir = os.path.join(source_dir, "extracted")
@@ -132,10 +95,14 @@ def match_features(req: FeatureMatchRequest):
     search_dir = extracted_dir if os.path.exists(extracted_dir) and os.listdir(extracted_dir) else source_dir
 
     src_img_path, src_meta_path = None, None
-    try:
-        src_img_path, src_meta_path = scan_for_pds_data(search_dir)
-    except Exception:
-        pass
+    source_tif_candidate = os.path.join(source_dir, "source.tif")
+    if os.path.exists(source_tif_candidate):
+        src_img_path, src_meta_path = source_tif_candidate, None
+    else:
+        try:
+            src_img_path, src_meta_path = scan_for_pds_data(search_dir)
+        except Exception:
+            pass
 
     ref_tifs = glob.glob(os.path.join(ref_dir, "*.tif*"))
     if not ref_tifs:
@@ -145,11 +112,15 @@ def match_features(req: FeatureMatchRequest):
     using_simulated = False
     if src_img_path and ref_tifs:
         try:
-            src_raw, (src_lines, src_samples, src_dtype) = read_pds_image(
-                src_img_path, metadata_path=src_meta_path,
-                roi_lines=(req.roi_src[0], req.roi_src[1]),
-                roi_samples=(req.roi_src[2], req.roi_src[3])
-            )
+            if src_img_path.lower().endswith((".tif", ".tiff", ".png", ".jpg")):
+                src_raw, (src_shape, src_dtype) = read_reference_image(src_img_path, roi=req.roi_src)
+                src_lines, src_samples = src_shape[:2]
+            else:
+                src_raw, (src_lines, src_samples, src_dtype) = read_pds_image(
+                    src_img_path, metadata_path=src_meta_path,
+                    roi_lines=(req.roi_src[0], req.roi_src[1]),
+                    roi_samples=(req.roi_src[2], req.roi_src[3])
+                )
             ref_raw, _ = read_reference_image(
                 ref_tifs[0],
                 roi=(req.roi_ref[0], req.roi_ref[1], req.roi_ref[2], req.roi_ref[3])

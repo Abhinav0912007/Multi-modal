@@ -1,8 +1,10 @@
 /**
- * LunarHero: High-precision scientific Canvas 3D Moon & Chandrayaan-1 Orbital Visualization
- * Renders realistic illuminated lunar sphere with maria basins, crater rays,
- * vector coordinate grid (orthographic projection), and Chandrayaan orbital path.
+ * LunarHero: Realistic Three.js 3D Moon & Chandrayaan-1 Orbital Visualization
+ * Incorporates the high-fidelity 3D normal-mapped Moon model from Tomislav Jezidžić (CodePen)
+ * combined with synchronized ISRO coordinate grid, polar orbit, moving spacecraft, and axis reticles.
  */
+
+import * as THREE from 'three'
 
 interface Star {
   x: number
@@ -13,28 +15,21 @@ interface Star {
   twinkleSpeed: number
 }
 
-interface Crater {
-  lon: number // in radians
-  lat: number // in radians
-  radius: number // in radians
-  depth: number
-  hasRays?: boolean
-}
-
-interface Maria {
-  lon: number
-  lat: number
-  rx: number
-  ry: number
-  rot: number
-  name: string
-}
-
 export class LunarHero {
+  private wrapper: HTMLDivElement
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private container: HTMLElement
   private animationFrameId: number | null = null
+
+  // Three.js 3D Scene components
+  private scene!: THREE.Scene
+  private camera!: THREE.PerspectiveCamera
+  private renderer!: THREE.WebGLRenderer
+  private moonMesh!: THREE.Mesh
+  private pointLight!: THREE.PointLight
+  private readonly moonRadius3D = 8.0
+  private readonly cameraDist = 25.0
 
   // Rotation and interaction
   private rotY = -0.45 // Longitude rotation
@@ -57,32 +52,6 @@ export class LunarHero {
   // Stars background
   private stars: Star[] = []
 
-  // Prominent Lunar Features (scientifically located on lunar sphere)
-  private craters: Crater[] = [
-    { lon: -0.195, lat: -0.756, radius: 0.065, depth: 0.9, hasRays: true }, // Tycho (-11.2 deg, -43.3 deg)
-    { lon: -0.349, lat: 0.169, radius: 0.07, depth: 0.85, hasRays: true },  // Copernicus (-20.0 deg, 9.7 deg)
-    { lon: -0.663, lat: 0.141, radius: 0.04, depth: 0.7, hasRays: true },   // Kepler (-38.0 deg, 8.1 deg)
-    { lon: -0.827, lat: 0.414, radius: 0.045, depth: 0.95 },                // Aristarchus (-47.4 deg, 23.7 deg)
-    { lon: 0.035, lat: 0.170, radius: 0.045, depth: 0.6 },                  // Manilius (2.0 deg, 9.7 deg)
-    { lon: 0.015, lat: -0.052, radius: 0.05, depth: 0.65 },                 // Ptolemaeus
-    { lon: -0.035, lat: -0.276, radius: 0.05, depth: 0.7 },                 // Arzachel
-    { lon: 0.401, lat: 0.140, radius: 0.04, depth: 0.6 },                   // Taruntius
-    { lon: 0.698, lat: 0.105, radius: 0.045, depth: 0.7 },                  // Langrenus
-    { lon: 0.297, lat: 0.354, radius: 0.05, depth: 0.65 },                  // Plinius
-  ]
-
-  private maria: Maria[] = [
-    { lon: -0.314, lat: 0.558, rx: 0.36, ry: 0.28, rot: 0.1, name: 'Mare Imbrium' },
-    { lon: -0.785, lat: 0.349, rx: 0.52, ry: 0.55, rot: -0.2, name: 'Oceanus Procellarum' },
-    { lon: 0.314, lat: 0.488, rx: 0.24, ry: 0.20, rot: -0.1, name: 'Mare Serenitatis' },
-    { lon: 0.541, lat: 0.148, rx: 0.26, ry: 0.22, rot: 0.15, name: 'Mare Tranquillitatis' },
-    { lon: 1.030, lat: 0.297, rx: 0.18, ry: 0.16, rot: 0.05, name: 'Mare Crisium' },
-    { lon: 0.890, lat: -0.052, rx: 0.22, ry: 0.20, rot: 0.3, name: 'Mare Fecunditatis' },
-    { lon: 0.611, lat: -0.262, rx: 0.16, ry: 0.14, rot: -0.2, name: 'Mare Nectaris' },
-    { lon: -0.279, lat: -0.349, rx: 0.25, ry: 0.18, rot: 0.1, name: 'Mare Nubium' },
-    { lon: -0.384, lat: -0.488, rx: 0.20, ry: 0.15, rot: -0.1, name: 'Mare Humorum' },
-  ]
-
   // TMC Imaging Footprint (approx latitude & longitude for active pair scene)
   private swathLat = 0.18 // ~10 deg N
   private swathLon = 0.48 // ~27.5 deg E (near Mare Tranquillitatis)
@@ -94,9 +63,28 @@ export class LunarHero {
 
   constructor(container: HTMLElement) {
     this.container = container
+
+    this.wrapper = document.createElement('div')
+    this.wrapper.className = 'lunar-hero-wrapper'
+    this.wrapper.style.position = 'relative'
+    this.wrapper.style.width = '100%'
+    this.wrapper.style.height = '100%'
+    this.wrapper.style.overflow = 'hidden'
+    this.wrapper.style.cursor = 'grab'
+    this.wrapper.style.userSelect = 'none'
+
+    this.initThree()
+
     this.canvas = document.createElement('canvas')
-    this.canvas.className = 'lunar-canvas'
+    this.canvas.className = 'lunar-canvas-overlay'
+    this.canvas.style.position = 'absolute'
+    this.canvas.style.top = '0'
+    this.canvas.style.left = '0'
+    this.canvas.style.pointerEvents = 'none'
     this.ctx = this.canvas.getContext('2d')!
+
+    this.wrapper.appendChild(this.renderer.domElement)
+    this.wrapper.appendChild(this.canvas)
 
     this.initCanvas()
     this.initStars()
@@ -104,17 +92,80 @@ export class LunarHero {
     this.render()
   }
 
+  private initThree() {
+    this.scene = new THREE.Scene()
+    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000)
+    this.camera.position.z = this.cameraDist
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    this.renderer.setClearColor(0x020612, 1)
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1)
+    this.renderer.domElement.style.position = 'absolute'
+    this.renderer.domElement.style.top = '0'
+    this.renderer.domElement.style.left = '0'
+    this.renderer.domElement.style.width = '100%'
+    this.renderer.domElement.style.height = '100%'
+
+    // Deep space ambient illumination
+    const ambientLight = new THREE.AmbientLight(0x1e293b, 0.6)
+    this.scene.add(ambientLight)
+
+    // Main PointLight matching the CodePen realistic moon lighting
+    this.pointLight = new THREE.PointLight(0xffffff, 2.4, 500)
+    this.pointLight.position.set(-200, 50, 150)
+    this.scene.add(this.pointLight)
+
+    // Deep-space subtle cyan rim light
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.4)
+    rimLight.position.set(100, -80, -60)
+    this.scene.add(rimLight)
+
+    // High definition 3D Moon sphere geometry
+    const geometry = new THREE.SphereGeometry(this.moonRadius3D, 64, 64)
+
+    // Normal mapped lunar material
+    const material = new THREE.MeshPhongMaterial({
+      color: 0xcccccc,
+      shininess: 2,
+      specular: 0x111111
+    })
+
+    const texLoader = new THREE.TextureLoader()
+    const onTextureLoaded = (tex: THREE.Texture) => {
+      tex.wrapS = THREE.RepeatWrapping
+      tex.wrapT = THREE.ClampToEdgeWrapping
+      material.normalMap = tex
+      material.normalScale = new THREE.Vector2(1.8, 1.8)
+      material.needsUpdate = true
+    }
+
+    texLoader.load('/moon_normal.png', onTextureLoaded, undefined, () => {
+      texLoader.load(
+        'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/i/06a094a4-7bd7-4bb9-b998-6c1e17f66c08/dbcju0k-b9b333e1-dd8d-4657-90db-7d3e7e179843.png',
+        onTextureLoaded
+      )
+    })
+
+    this.moonMesh = new THREE.Mesh(geometry, material)
+    this.scene.add(this.moonMesh)
+  }
+
   private initCanvas() {
     const dpr = window.devicePixelRatio || 1
     const rect = this.container.getBoundingClientRect()
-    const width = rect.width || 800
-    const height = rect.height || 480
+    const width = Math.floor(rect.width) || 800
+    const height = Math.floor(rect.height) || 480
+
+    this.renderer.setSize(width, height)
+    this.camera.aspect = width / height
+    this.camera.updateProjectionMatrix()
 
     this.canvas.width = width * dpr
     this.canvas.height = height * dpr
     this.canvas.style.width = `${width}px`
     this.canvas.style.height = `${height}px`
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
     this.ctx.scale(dpr, dpr)
   }
 
@@ -143,13 +194,24 @@ export class LunarHero {
       this.initStars()
     })
 
-    this.canvas.addEventListener('mousedown', (e) => {
+    this.wrapper.addEventListener('mousedown', (e) => {
       this.isDragging = true
       this.lastMouseX = e.clientX
       this.lastMouseY = e.clientY
+      this.wrapper.style.cursor = 'grabbing'
     })
 
     window.addEventListener('mousemove', (e) => {
+      // Dynamic lighting reaction (CodePen)
+      const rect = this.wrapper.getBoundingClientRect()
+      const relX = (e.clientX - rect.left) / (rect.width || 1)
+      const relY = (e.clientY - rect.top) / (rect.height || 1)
+      if (this.pointLight) {
+        this.pointLight.position.x = (relX * 2 - 1) * 200
+        this.pointLight.position.y = (-(relY * 2 - 1)) * 120
+      }
+
+      // Drag to rotate
       if (!this.isDragging) return
       const dx = e.clientX - this.lastMouseX
       const dy = e.clientY - this.lastMouseY
@@ -162,7 +224,10 @@ export class LunarHero {
     })
 
     window.addEventListener('mouseup', () => {
-      this.isDragging = false
+      if (this.isDragging) {
+        this.isDragging = false
+        this.wrapper.style.cursor = 'grab'
+      }
     })
   }
 
@@ -207,19 +272,19 @@ export class LunarHero {
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId)
     }
+    if (this.renderer) {
+      this.renderer.dispose()
+    }
   }
 
-  // 3D Spherical Projection helpers
+  // 3D Spherical Projection for vector overlays
   private project3D(lon: number, lat: number, r: number, cx: number, cy: number): { x: number; y: number; visible: boolean; depth: number } {
-    // Apply Y-axis rotation (longitude)
     const l = lon + this.rotY
-    // 3D Cartesian coordinates on sphere
     const cosLat = Math.cos(lat)
     let x3 = r * cosLat * Math.sin(l)
     let y3 = -r * Math.sin(lat)
     let z3 = r * cosLat * Math.cos(l)
 
-    // Apply X-axis rotation (latitude tilt)
     const cosTilt = Math.cos(this.rotX)
     const sinTilt = Math.sin(this.rotX)
     const y3_t = y3 * cosTilt - z3 * sinTilt
@@ -238,32 +303,37 @@ export class LunarHero {
     const w = this.canvas.width / (window.devicePixelRatio || 1)
     const h = this.canvas.height / (window.devicePixelRatio || 1)
     const cx = w * 0.48
-    const cy = h * 0.52
-    const radius = Math.min(w, h) * 0.38
+    const cy = h * 0.50
 
-    // Clear frame
-    this.ctx.fillStyle = '#020612'
-    this.ctx.fillRect(0, 0, w, h)
+    // Synchronize 3D camera so Three.js 3D Moon sphere exactly aligns with (cx, cy)
+    const fovHalfRad = (this.camera.fov * Math.PI) / 360
+    const visibleHalfHeight = this.cameraDist * Math.tan(fovHalfRad)
+    const pxPerUnit = (h / 2) / visibleHalfHeight
+    const radius = this.moonRadius3D * pxPerUnit
 
-    // Update animations
+    this.camera.position.x = -((cx - w / 2) / pxPerUnit)
+    this.camera.position.y = ((cy - h / 2) / pxPerUnit)
+    this.camera.lookAt(-((cx - w / 2) / pxPerUnit), ((cy - h / 2) / pxPerUnit), 0)
+
+    // Update rotation
     if (this.autoRotate && !this.isDragging) {
       this.rotY += this.MOON_ROT_SPEED
     }
     this.orbitAngle = (this.orbitAngle + this.ORBIT_SPEED) % (Math.PI * 2)
 
-    // 1. Draw Starfield
+    if (this.moonMesh) {
+      this.moonMesh.rotation.y = this.rotY
+      this.moonMesh.rotation.x = this.rotX
+    }
+
+    // 1. Render realistic Three.js 3D Moon
+    this.renderer.render(this.scene, this.camera)
+
+    // 2. Clear 2D overlay canvas for overlays
+    this.ctx.clearRect(0, 0, w, h)
+
+    // 3. Draw Starfield
     this.drawStarfield()
-
-    // 2. Draw Subtle Deep-Space Cosmic Dust
-    const nebulaGrad = this.ctx.createRadialGradient(cx + 80, cy - 60, radius * 0.3, cx, cy, radius * 2.5)
-    nebulaGrad.addColorStop(0, 'rgba(56, 189, 248, 0.04)')
-    nebulaGrad.addColorStop(0.5, 'rgba(30, 58, 138, 0.03)')
-    nebulaGrad.addColorStop(1, 'transparent')
-    this.ctx.fillStyle = nebulaGrad
-    this.ctx.fillRect(0, 0, w, h)
-
-    // 3. Draw Lunar Sphere Base (with realistic illumination & terminator)
-    this.drawLunarSphere(cx, cy, radius)
 
     // 4. Draw Coordinate / Grid Overlay
     if (this.showGrid) {
@@ -297,126 +367,6 @@ export class LunarHero {
       this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2)
       this.ctx.fill()
     }
-  }
-
-  private drawLunarSphere(cx: number, cy: number, radius: number) {
-    this.ctx.save()
-
-    // Create clipping circle for the Moon disk
-    this.ctx.beginPath()
-    this.ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-    this.ctx.clip()
-
-    // Base lunar highland albedo
-    this.ctx.fillStyle = '#1e2430'
-    this.ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2)
-
-    // Draw Maria Basins (dark basaltic plains)
-    for (const m of this.maria) {
-      const proj = this.project3D(m.lon, m.lat, radius, cx, cy)
-      if (proj.visible && proj.depth > 0) {
-        this.ctx.save()
-        this.ctx.translate(proj.x, proj.y)
-        this.ctx.rotate(m.rot + this.rotX * 0.5)
-        
-        // Scale with perspective depth
-        const depthScale = Math.max(0.2, proj.depth)
-        this.ctx.scale(depthScale, 1.0)
-
-        const mareGrad = this.ctx.createRadialGradient(0, 0, 5, 0, 0, m.rx * radius)
-        mareGrad.addColorStop(0, 'rgba(12, 16, 24, 0.85)')
-        mareGrad.addColorStop(0.7, 'rgba(18, 24, 34, 0.7)')
-        mareGrad.addColorStop(1, 'rgba(28, 36, 48, 0)')
-
-        this.ctx.fillStyle = mareGrad
-        this.ctx.beginPath()
-        this.ctx.ellipse(0, 0, m.rx * radius, m.ry * radius, 0, 0, Math.PI * 2)
-        this.ctx.fill()
-        this.ctx.restore()
-      }
-    }
-
-    // Draw Major Crater Ray Systems & Impacts
-    for (const c of this.craters) {
-      const proj = this.project3D(c.lon, c.lat, radius, cx, cy)
-      if (proj.visible && proj.depth > 0.05) {
-        const craterR = c.radius * radius * proj.depth
-
-        // If crater has bright ray system (Tycho, Copernicus)
-        if (c.hasRays) {
-          this.ctx.strokeStyle = `rgba(203, 213, 225, ${0.18 * proj.depth})`
-          this.ctx.lineWidth = 1
-          const numRays = 14
-          for (let i = 0; i < numRays; i++) {
-            const rayAngle = (i / numRays) * Math.PI * 2
-            const rayLength = radius * (0.35 + (i % 3) * 0.25) * proj.depth
-            this.ctx.beginPath()
-            this.ctx.moveTo(proj.x, proj.y)
-            this.ctx.lineTo(
-              proj.x + Math.cos(rayAngle) * rayLength,
-              proj.y + Math.sin(rayAngle) * rayLength
-            )
-            this.ctx.stroke()
-          }
-        }
-
-        // Crater rim & central peak
-        const rimGrad = this.ctx.createRadialGradient(proj.x, proj.y, 1, proj.x, proj.y, craterR)
-        rimGrad.addColorStop(0, `rgba(15, 23, 42, ${c.depth})`)
-        rimGrad.addColorStop(0.7, `rgba(30, 41, 59, ${c.depth * 0.8})`)
-        rimGrad.addColorStop(1, `rgba(203, 213, 225, ${0.4 * proj.depth})`)
-
-        this.ctx.fillStyle = rimGrad
-        this.ctx.beginPath()
-        this.ctx.arc(proj.x, proj.y, Math.max(2, craterR), 0, Math.PI * 2)
-        this.ctx.fill()
-      }
-    }
-
-    // Sun Illumination & Terminator (Light coming from upper-left sun vector)
-    const lightAngle = -Math.PI / 4 // 45 deg from top-left
-    const lightX = cx + Math.cos(lightAngle) * radius * 0.8
-    const lightY = cy + Math.sin(lightAngle) * radius * 0.8
-
-    // Sunlit surface overlay
-    const sunGrad = this.ctx.createRadialGradient(
-      lightX, lightY, radius * 0.1,
-      cx, cy, radius * 1.05
-    )
-    sunGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)')
-    sunGrad.addColorStop(0.4, 'rgba(203, 213, 225, 0.2)')
-    sunGrad.addColorStop(0.75, 'rgba(15, 23, 42, 0.4)')
-    sunGrad.addColorStop(0.92, 'rgba(2, 6, 18, 0.92)')
-    sunGrad.addColorStop(1, 'rgba(2, 6, 18, 0.99)')
-
-    this.ctx.fillStyle = sunGrad
-    this.ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2)
-
-    // Terminator Shadow Boundary (Soft cosine day-to-night shading)
-    const termGrad = this.ctx.createLinearGradient(
-      cx - radius * 0.7, cy - radius * 0.7,
-      cx + radius * 0.85, cy + radius * 0.85
-    )
-    termGrad.addColorStop(0, 'rgba(255, 255, 255, 0.1)')
-    termGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.1)')
-    termGrad.addColorStop(0.7, 'rgba(2, 6, 18, 0.85)')
-    termGrad.addColorStop(1, 'rgba(1, 4, 12, 0.98)')
-
-    this.ctx.fillStyle = termGrad
-    this.ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2)
-
-    this.ctx.restore()
-
-    // Realistic Lunar Limb Glow / Space contrast
-    const limbGrad = this.ctx.createRadialGradient(cx, cy, radius * 0.96, cx, cy, radius * 1.05)
-    limbGrad.addColorStop(0, 'rgba(56, 189, 248, 0.25)')
-    limbGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.08)')
-    limbGrad.addColorStop(1, 'transparent')
-
-    this.ctx.fillStyle = limbGrad
-    this.ctx.beginPath()
-    this.ctx.arc(cx, cy, radius * 1.05, 0, Math.PI * 2)
-    this.ctx.fill()
   }
 
   private drawCoordinateGrid(cx: number, cy: number, radius: number) {
@@ -494,7 +444,6 @@ export class LunarHero {
   }
 
   private drawTmcFootprint(cx: number, cy: number, radius: number) {
-    // Project TMC imaging swath rectangle onto rotating lunar surface
     const p1 = this.project3D(this.swathLon - 0.04, this.swathLat + 0.12, radius, cx, cy)
     const p2 = this.project3D(this.swathLon + 0.04, this.swathLat + 0.12, radius, cx, cy)
     const p3 = this.project3D(this.swathLon + 0.04, this.swathLat - 0.12, radius, cx, cy)
@@ -509,7 +458,6 @@ export class LunarHero {
       this.ctx.lineTo(p4.x, p4.y)
       this.ctx.closePath()
 
-      // Glowing golden swatch fill
       this.ctx.fillStyle = 'rgba(245, 158, 11, 0.22)'
       this.ctx.fill()
 
@@ -519,7 +467,6 @@ export class LunarHero {
       this.ctx.shadowBlur = 8
       this.ctx.stroke()
 
-      // Swath Label Tag
       this.ctx.shadowBlur = 0
       this.ctx.font = '9px "JetBrains Mono", monospace'
       this.ctx.fillStyle = '#fef08a'
@@ -530,8 +477,6 @@ export class LunarHero {
   }
 
   private drawOrbitAndSpacecraft(cx: number, cy: number, radius: number) {
-    // Chandrayaan-1 was in a 100 km polar orbit (~89.9 deg inclination)
-    // Orbit radius in canvas coordinates
     const orbitR = radius * 1.18
 
     // 1. Draw glowing Polar Orbit Ellipse
@@ -541,7 +486,6 @@ export class LunarHero {
     const steps = 90
     for (let i = 0; i <= steps; i++) {
       const theta = (i / steps) * Math.PI * 2
-      // Polar orbit inclined slightly to viewer
       const ox = cx + Math.sin(theta) * orbitR * 0.35
       const oy = cy - Math.cos(theta) * orbitR
 
@@ -560,7 +504,6 @@ export class LunarHero {
     const scX = cx + Math.sin(this.orbitAngle) * orbitR * 0.35
     const scY = cy - Math.cos(this.orbitAngle) * orbitR
 
-    // Calculate sub-spacecraft lat/lon for HUD
     const normY = (cy - scY) / orbitR
     const scLatDeg = Math.asin(Math.max(-1, Math.min(1, normY))) * (180 / Math.PI)
     const scLonDeg = (((this.orbitAngle * 180) / Math.PI - (this.rotY * 180) / Math.PI) % 360 + 360) % 360 - 180
@@ -592,19 +535,17 @@ export class LunarHero {
     this.ctx.shadowColor = '#38bdf8'
     this.ctx.shadowBlur = 10
 
-    // Solar panels (blue rectangles)
+    // Solar panels
     this.ctx.fillStyle = '#0284c7'
     this.ctx.strokeStyle = '#38bdf8'
     this.ctx.lineWidth = 1
 
-    // Left panel
     this.ctx.fillRect(-12, -2, 8, 4)
     this.ctx.strokeRect(-12, -2, 8, 4)
-    // Right panel
     this.ctx.fillRect(4, -2, 8, 4)
     this.ctx.strokeRect(4, -2, 8, 4)
 
-    // Satellite bus body (gold foil cube)
+    // Satellite bus body
     this.ctx.fillStyle = '#f59e0b'
     this.ctx.fillRect(-3, -3, 6, 6)
     this.ctx.strokeStyle = '#fef08a'
@@ -622,7 +563,6 @@ export class LunarHero {
   private drawReticleOverlay(cx: number, cy: number, radius: number) {
     this.ctx.save()
 
-    // Polar axis ticks
     this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)'
     this.ctx.lineWidth = 1
 
@@ -667,7 +607,7 @@ export class LunarHero {
     this.ctx.restore()
   }
 
-  public getCanvas(): HTMLCanvasElement {
-    return this.canvas
+  public getCanvas(): HTMLElement {
+    return this.wrapper
   }
 }
