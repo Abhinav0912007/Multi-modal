@@ -13,13 +13,6 @@ from datetime import datetime
 import numpy as np
 import cv2
 import tifffile
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
-)
 
 from backend.config import OUTPUTS_DIR, PAIRS_DIR, PROJECT_ROOT
 from backend.processing.pds_reader import read_pds_image, read_reference_image
