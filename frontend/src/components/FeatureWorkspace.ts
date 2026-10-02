@@ -106,31 +106,63 @@ export class FeatureWorkspace {
     if (callbacks.preprocProvider) this.preprocProvider = callbacks.preprocProvider
   }
 
+  private datasetSessions: Record<string, {
+    result: FeatureMatchResult | null
+    currentState: MatchingState
+    selectedMatchId: number | null
+    hoveredMatchId: number | null
+    zoom: number
+    srcPanX: number
+    srcPanY: number
+    refPanX: number
+    refPanY: number
+  }> = {}
+
   public setActivePair(pairId: string, pairData?: PairItem | null, roiCoords?: any, isRoiApplied?: boolean) {
     const isNewPair = this.pairId !== pairId
+
+    // 1. Strictly save outgoing dataset's feature correspondence session
+    if (this.pairId) {
+      this.datasetSessions[this.pairId] = {
+        result: this.result,
+        currentState: this.currentState,
+        selectedMatchId: this.selectedMatchId,
+        hoveredMatchId: this.hoveredMatchId,
+        zoom: this.zoom,
+        srcPanX: this.srcPanX,
+        srcPanY: this.srcPanY,
+        refPanX: this.refPanX,
+        refPanY: this.refPanY,
+      }
+    }
+
     this.pairId = pairId
     if (pairData !== undefined) this.pairData = pairData
     if (roiCoords !== undefined) this.roiCoords = roiCoords
     if (isRoiApplied !== undefined) this.isRoiApplied = isRoiApplied
 
     if (isNewPair) {
-      this.result = null
       const isIirs = pairId === 'pair_002' || pairData?.instrument === 'IIRS' || pairData?.product_type === 'HYPERSPECTRAL'
-      this.currentState = isIirs ? 'REQUIRES_BAND' : 'READY'
       this.metadata.instrument = pairData?.instrument || (pairId === 'pair_002' ? 'IIRS' : pairId === 'pair_003' ? 'TMC' : 'OHRC')
       this.metadata.mission = pairData?.mission || (pairId === 'pair_003' ? 'Chandrayaan-1' : 'Chandrayaan-2')
-      this.selectedMatchId = null
-      this.hoveredMatchId = null
       this.srcImgEl = null
       this.refImgEl = null
-      this.zoom = 1.0
-      this.srcPanX = 0
-      this.srcPanY = 0
-      this.refPanX = 0
-      this.refPanY = 0
 
       if (isIirs) {
+        // Hyperspectral cube: never reuse matches or metrics from other datasets
+        this.result = null
+        this.currentState = 'REQUIRES_BAND'
+        this.selectedMatchId = null
+        this.hoveredMatchId = null
+        this.zoom = 1.0
+        this.srcPanX = 0
+        this.srcPanY = 0
+        this.refPanX = 0
+        this.refPanY = 0
         this.showIirsGuard()
+        this.renderMetrics(null)
+        this.updateMatchCountBadge()
+        this.drawAll()
       } else {
         this.hideIirsGuard()
         const btnRun = this.rootEl.querySelector('#fc-btn-run') as HTMLButtonElement | null
@@ -141,6 +173,36 @@ export class FeatureWorkspace {
             <span>Run Feature Matching</span>
           `
           btnRun.title = 'Execute SIFT feature extraction and FLANN ratio test'
+        }
+
+        // Restore target dataset's isolated session if previously computed
+        const existing = this.datasetSessions[pairId]
+        if (existing && existing.result) {
+          this.result = existing.result
+          this.currentState = existing.currentState
+          this.selectedMatchId = existing.selectedMatchId
+          this.hoveredMatchId = existing.hoveredMatchId
+          this.zoom = existing.zoom
+          this.srcPanX = existing.srcPanX
+          this.srcPanY = existing.srcPanY
+          this.refPanX = existing.refPanX
+          this.refPanY = existing.refPanY
+          this.renderMetrics(existing.result)
+          this.updateMatchCountBadge()
+          this.drawAll()
+        } else {
+          this.result = null
+          this.currentState = 'READY'
+          this.selectedMatchId = null
+          this.hoveredMatchId = null
+          this.zoom = 1.0
+          this.srcPanX = 0
+          this.srcPanY = 0
+          this.refPanX = 0
+          this.refPanY = 0
+          this.renderMetrics(null)
+          this.updateMatchCountBadge()
+          this.drawAll()
         }
       }
 
@@ -1065,12 +1127,31 @@ export class FeatureWorkspace {
           this.roiCoords.ref_x1 || 600
         ]
       } else {
-        params.roi_src = [42000, 46000, 1000, 7000]
-        params.roi_ref = [3000, 5000, 100, 600]
+        if (this.pairId === 'pair_002') {
+          params.roi_src = [0, 2000, 0, 1104]
+          params.roi_ref = [0, 2000, 0, 600]
+        } else if (this.pairId === 'pair_003') {
+          params.roi_src = [20000, 24000, 500, 3500]
+          params.roi_ref = [2500, 4500, 150, 550]
+        } else {
+          params.roi_src = [42000, 46000, 1000, 7000]
+          params.roi_ref = [3000, 5000, 100, 600]
+        }
       }
 
       const res = await fetchFeatureMatching(params)
       this.result = res
+      this.datasetSessions[this.pairId] = {
+        result: res,
+        currentState: this.currentState,
+        selectedMatchId: this.selectedMatchId,
+        hoveredMatchId: this.hoveredMatchId,
+        zoom: this.zoom,
+        srcPanX: this.srcPanX,
+        srcPanY: this.srcPanY,
+        refPanX: this.refPanX,
+        refPanY: this.refPanY,
+      }
 
       if (btnRun) {
         btnRun.disabled = false

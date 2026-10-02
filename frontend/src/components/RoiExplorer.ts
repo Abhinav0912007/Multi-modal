@@ -115,10 +115,53 @@ export class RoiExplorer {
     }, 80)
   }
 
+  private pairRois: Record<string, { coords: RoiCoordinates; isApplied: boolean }> = {}
+
+  private getDefaultCoordsForPair(pairId: string, pairData?: PairItem | null): RoiCoordinates {
+    if (pairData?.nominal_roi) {
+      return { ...pairData.nominal_roi }
+    }
+    if (pairId === 'pair_001') {
+      return {
+        src_sample_start: 1000,
+        src_sample_end: 7000,
+        src_line_start: 42000,
+        src_line_end: 46000,
+        ref_x0: 100,
+        ref_y0: 3000,
+        ref_x1: 600,
+        ref_y1: 5000,
+      }
+    }
+    if (pairId === 'pair_002') {
+      return {
+        src_sample_start: 0,
+        src_sample_end: 1104,
+        src_line_start: 0,
+        src_line_end: 2000,
+        ref_x0: 0,
+        ref_y0: 0,
+        ref_x1: 600,
+        ref_y1: 2000,
+      }
+    }
+    // pair_003 (TMC)
+    return {
+      src_sample_start: 500,
+      src_sample_end: 3500,
+      src_line_start: 20000,
+      src_line_end: 24000,
+      ref_x0: 150,
+      ref_y0: 2500,
+      ref_x1: 550,
+      ref_y1: 4500,
+    }
+  }
+
   private updateDimensionsFromPair() {
     if (this.pairData?.source_dimensions) {
-      this.srcNativeW = this.pairData.source_dimensions.samples || 12000
-      this.srcNativeH = this.pairData.source_dimensions.lines || 50537
+      this.srcNativeW = this.pairData.source_dimensions.samples || (this.activePairId === 'pair_001' ? 12000 : this.activePairId === 'pair_002' ? 1104 : 4000)
+      this.srcNativeH = this.pairData.source_dimensions.lines || (this.activePairId === 'pair_002' ? 4000 : 50537)
     } else if (this.activePairId === 'pair_001') {
       this.srcNativeW = 12000
       this.srcNativeH = 50537
@@ -138,19 +181,17 @@ export class RoiExplorer {
       this.refNativeH = 7420
     }
 
-    if (this.pairData?.nominal_roi) {
-      this.currentCoords = { ...this.pairData.nominal_roi }
-    } else if (this.activePairId === 'pair_001') {
-      this.currentCoords = {
-        src_sample_start: 1000,
-        src_sample_end: 7000,
-        src_line_start: 42000,
-        src_line_end: 46000,
-        ref_x0: 100,
-        ref_y0: 3000,
-        ref_x1: 600,
-        ref_y1: 5000,
+    // Always fetch strictly isolated ROI coordinates for this specific active dataset
+    if (this.pairRois[this.activePairId]) {
+      this.currentCoords = { ...this.pairRois[this.activePairId].coords }
+      this.isApplied = this.pairRois[this.activePairId].isApplied
+    } else {
+      this.currentCoords = this.getDefaultCoordsForPair(this.activePairId, this.pairData)
+      this.pairRois[this.activePairId] = {
+        coords: { ...this.currentCoords },
+        isApplied: false,
       }
+      this.isApplied = false
     }
   }
 
@@ -160,12 +201,30 @@ export class RoiExplorer {
 
   public setActivePair(pairId: string, pairData?: PairItem | null, forceReset: boolean = false) {
     const isNewPair = pairId !== this.activePairId
+
+    // 1. Strictly save the outgoing dataset's session state before switching
+    if (this.activePairId) {
+      this.pairRois[this.activePairId] = {
+        coords: { ...this.currentCoords },
+        isApplied: this.isApplied,
+      }
+    }
+
     this.activePairId = pairId
     if (pairData !== undefined) {
       this.pairData = pairData
     }
-    if (isNewPair || forceReset) {
-      this.isApplied = false
+
+    // 2. Load the target dataset's isolated session state
+    if (isNewPair || forceReset || !this.pairRois[pairId]) {
+      if (!this.pairRois[pairId] || forceReset) {
+        this.pairRois[pairId] = {
+          coords: this.getDefaultCoordsForPair(pairId, this.pairData),
+          isApplied: false,
+        }
+      }
+      this.currentCoords = { ...this.pairRois[pairId].coords }
+      this.isApplied = this.pairRois[pairId].isApplied
       this.updateDimensionsFromPair()
       this.initPolygonFromCoords()
       this.loadPairImages()
@@ -173,10 +232,59 @@ export class RoiExplorer {
         this.fitSourceView()
         this.fitReferenceView()
       }, 60)
+    } else {
+      this.currentCoords = { ...this.pairRois[pairId].coords }
+      this.isApplied = this.pairRois[pairId].isApplied
+      this.updateDimensionsFromPair()
+      this.initPolygonFromCoords()
     }
+
+    // 3. Reflect isolated dataset state in HUD / buttons
+    this.updateAppliedStatusUI()
     this.updateHeaderMeta()
     this.updateInputFields()
     this.updateSummary()
+  }
+
+  private updateAppliedStatusUI() {
+    const badge = this.container.querySelector('#roi-status-badge')
+    const sumStatus = this.container.querySelector('#sum-status-text')
+    const btnNext = this.container.querySelector<HTMLButtonElement>('#btn-continue-preprocessing')
+    const btnHeader = this.container.querySelector<HTMLElement>('#btn-roi-next-stage-header')
+
+    if (this.isApplied) {
+      if (badge) {
+        badge.textContent = 'Applied ✓'
+        badge.className = 'text-emerald'
+      }
+      if (sumStatus) {
+        sumStatus.textContent = 'Applied ✓'
+        sumStatus.className = 'v font-mono text-emerald'
+      }
+      if (btnNext) {
+        btnNext.disabled = false
+        btnNext.classList.add('pulse-glow')
+      }
+      if (btnHeader) {
+        btnHeader.style.display = 'inline-flex'
+      }
+    } else {
+      if (badge) {
+        badge.textContent = 'Draft (Unapplied)'
+        badge.className = 'text-amber'
+      }
+      if (sumStatus) {
+        sumStatus.textContent = 'Draft (Unapplied)'
+        sumStatus.className = 'v font-mono text-amber'
+      }
+      if (btnNext) {
+        btnNext.disabled = true
+        btnNext.classList.remove('pulse-glow')
+      }
+      if (btnHeader) {
+        btnHeader.style.display = 'none'
+      }
+    }
   }
 
   public setPairData(pairData: PairItem | null) {
@@ -208,9 +316,17 @@ export class RoiExplorer {
 
   public setCoordinates(coords: RoiCoordinates) {
     this.currentCoords = { ...coords }
+    this.isApplied = false
+    if (this.activePairId) {
+      this.pairRois[this.activePairId] = {
+        coords: { ...this.currentCoords },
+        isApplied: false,
+      }
+    }
     this.initPolygonFromCoords()
     this.updateInputFields()
     this.updateSummary()
+    this.updateAppliedStatusUI()
   }
 
   public destroy() {
@@ -1725,6 +1841,12 @@ export class RoiExplorer {
     }
 
     this.isApplied = true
+    if (this.activePairId) {
+      this.pairRois[this.activePairId] = {
+        coords: { ...this.currentCoords },
+        isApplied: true,
+      }
+    }
     this.onApplyCallback(this.currentCoords)
 
     // Update status badge

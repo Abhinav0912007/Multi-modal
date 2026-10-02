@@ -54,17 +54,89 @@ export class SpatialWorkspace {
     this.runAnalysis()
   }
 
-  public setActivePair(pairId: string) {
-    if (this.pairId !== pairId) {
-      this.pairId = pairId
-      const pairTag = this.rootEl.querySelector('#sp-pair-badge')
-      if (pairTag) pairTag.textContent = `TARGET: ${pairId.toUpperCase()}`
+  private pairResults: Record<string, SpatialAnalyzeResult | null> = {}
+  private configuredRoi?: { roi_src: [number, number, number, number]; roi_ref: [number, number, number, number] }
+
+  public setActivePair(
+    pairId: string,
+    roi?: { roi_src: [number, number, number, number]; roi_ref: [number, number, number, number] }
+  ) {
+    if (this.pairId) {
+      this.pairResults[this.pairId] = this.result
+    }
+
+    this.pairId = pairId
+    if (roi) {
+      this.configuredRoi = { ...roi }
+    }
+
+    const pairTag = this.rootEl.querySelector('#sp-pair-badge')
+    if (pairTag) pairTag.textContent = `TARGET: ${pairId.toUpperCase()}`
+
+    const btn = this.rootEl.querySelector('#btn-run-spatial') as HTMLButtonElement | null
+
+    if (pairId === 'pair_002') {
+      this.result = null
+      this.imgEl = null
+      if (btn) {
+        btn.disabled = true
+        btn.title = 'IIRS spatial band extraction required before spatial analysis'
+      }
+      this.draw()
+      const statEl = this.rootEl.querySelector<HTMLElement>('#insp-cell-status')
+      if (statEl) {
+        statEl.textContent = 'IIRS Hyperspectral Cube — Band Extraction Required'
+        statEl.style.color = 'var(--amber-warning)'
+      }
+      const setVal = (id: string, text: string) => {
+        const el = this.rootEl.querySelector(id)
+        if (el) el.textContent = text
+      }
+      setVal('#sp-cell-dims-readout', '0 × 0 px')
+      setVal('#sp-kpi-coverage', '0.0%')
+      setVal('#sp-kpi-active-cells', 'Active: 0 / 64 Cells')
+      setVal('#sp-kpi-uniformity', '0.000')
+      setVal('#sp-kpi-cv', '0.00')
+      return
+    }
+
+    if (btn) {
+      btn.disabled = false
+      btn.title = 'Compute spatial inlier grid'
+    }
+
+    if (this.pairResults[pairId]) {
+      this.result = this.pairResults[pairId]
+      this.loadImageAndDraw()
+      if (this.result) this.populateTelemetry(this.result)
+    } else {
+      this.result = null
       this.runAnalysis()
     }
   }
 
   public onTabActive() {
     this.fitCanvas()
+    if (this.pairId === 'pair_002') {
+      this.result = null
+      this.imgEl = null
+      const statEl = this.rootEl.querySelector<HTMLElement>('#insp-cell-status')
+      if (statEl) {
+        statEl.textContent = 'IIRS Hyperspectral Cube — Band Extraction Required'
+        statEl.style.color = 'var(--amber-warning)'
+      }
+      const setVal = (id: string, text: string) => {
+        const el = this.rootEl.querySelector(id)
+        if (el) el.textContent = text
+      }
+      setVal('#sp-cell-dims-readout', '0 × 0 px')
+      setVal('#sp-kpi-coverage', '0.0%')
+      setVal('#sp-kpi-active-cells', 'Active: 0 / 64 Cells')
+      setVal('#sp-kpi-uniformity', '0.000')
+      setVal('#sp-kpi-cv', '0.00')
+      this.draw()
+      return
+    }
     if (!this.result && !this.isLoading) {
       this.runAnalysis()
     } else {
@@ -536,19 +608,45 @@ export class SpatialWorkspace {
       btn.innerHTML = `<span class="spinner-orbit-sm"></span> Computing Grid...`
     }
 
+    if (this.pairId === 'pair_002') {
+      this.isLoading = false
+      if (btn) {
+        btn.disabled = true
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><circle cx="12" cy="12" r="10"/></svg>
+          Compute Spatial Grid
+        `
+      }
+      return
+    }
+
+    const currentPairAtStart = this.pairId
     try {
+      const defaultRoiSrc = this.pairId === 'pair_003'
+        ? [20000, 24000, 500, 3500]
+        : [42000, 46000, 1000, 7000]
+      const defaultRoiRef = this.pairId === 'pair_003'
+        ? [2500, 4500, 150, 550]
+        : [3000, 5000, 100, 600]
+
       const params: SpatialAnalyzeParams = {
         pair_id: this.pairId,
         grid_rows: this.gridRows,
         grid_cols: this.gridCols,
         min_inliers_per_cell: this.minInliers,
+        roi_src: this.configuredRoi ? this.configuredRoi.roi_src : (defaultRoiSrc as [number, number, number, number]),
+        roi_ref: this.configuredRoi ? this.configuredRoi.roi_ref : (defaultRoiRef as [number, number, number, number]),
       }
 
       const res = await fetchSpatialAnalysis(params)
+      if (this.pairId !== currentPairAtStart) {
+        return
+      }
       this.result = res
+      this.pairResults[this.pairId] = res
       this.loadImageAndDraw()
       this.populateTelemetry(res)
-      showHumanToast('Uniform inlier grid distribution computed (84.2% coverage)', 'success')
+      showHumanToast(`Uniform inlier grid distribution computed for ${this.pairId.toUpperCase()}`, 'success')
     } catch (err: any) {
       console.error('Spatial analysis failed:', err)
       const formatted = formatHumanReadableError(err)

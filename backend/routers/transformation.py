@@ -39,6 +39,16 @@ def _compute_transformation_solution(pair_id: str, transform_type: str = "homogr
     Computes or retrieves high-precision geometric transformation matrix,
     decomposed parameters, residual error vector field, and statistical metrics.
     """
+    if pair_id == "pair_002":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "error",
+                "error_code": "band_extraction_required",
+                "message": "PAIR_002 is a Chandrayaan-2 IIRS hyperspectral cube. Band extraction required before transformation matrix estimation."
+            }
+        )
+
     out_dir = os.path.join(OUTPUTS_DIR, pair_id)
     saved_matrix_path = os.path.join(out_dir, "transformation_matrix.json")
     saved_metrics_path = os.path.join(out_dir, "metrics.json")

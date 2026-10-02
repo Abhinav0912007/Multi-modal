@@ -35,18 +35,42 @@ export class ExportWorkspace {
   private selectedCategory: string = 'all'
   private isGenerating: boolean = false
   private activeReportTab: 'preview' | 'json' | 'metadata' = 'preview'
+  private onPairChange?: (pairId: string) => void
+  private datasetSessions: Record<string, { artifacts: ArtifactItem[]; report: ScientificReportData | null }> = {}
 
-  constructor(container: HTMLElement, initialPairId: string = 'pair_001') {
+  constructor(container: HTMLElement, initialPairId: string = 'pair_001', onPairChange?: (pairId: string) => void) {
     this.container = container
     this.activePairId = initialPairId
+    this.onPairChange = onPairChange
     this.init()
   }
 
   public setPairId(pairId: string) {
-    if (this.activePairId !== pairId) {
-      this.activePairId = pairId
-      this.refreshData()
+    if (this.activePairId) {
+      this.datasetSessions[this.activePairId] = {
+        artifacts: this.artifacts,
+        report: this.reportData,
+      }
     }
+
+    this.activePairId = pairId
+
+    // Sync dropdown element
+    const sel = this.container.querySelector<HTMLSelectElement>('#export-pair-select')
+    if (sel && sel.value !== pairId) {
+      sel.value = pairId
+    }
+
+    if (this.datasetSessions[pairId]) {
+      this.artifacts = this.datasetSessions[pairId].artifacts
+      this.reportData = this.datasetSessions[pairId].report
+      this.updateStripMetrics()
+      this.updateCategoryCounts()
+      this.renderArtifactsList()
+      this.renderReportBody()
+    }
+
+    this.refreshData()
   }
 
   private async init() {
@@ -191,6 +215,9 @@ export class ExportWorkspace {
     sel?.addEventListener('change', (e) => {
       const newPair = (e.target as HTMLSelectElement).value
       this.setPairId(newPair)
+      if (this.onPairChange) {
+        this.onPairChange(newPair)
+      }
     })
 
     // Generate Scientific Report Button

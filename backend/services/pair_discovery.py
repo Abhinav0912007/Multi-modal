@@ -183,6 +183,28 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
             "ref_x1": 600,
             "ref_y1": 5000
         }
+    elif instrument == "TMC":
+        nominal_roi = {
+            "src_sample_start": 500,
+            "src_sample_end": 3500,
+            "src_line_start": 20000,
+            "src_line_end": 24000,
+            "ref_x0": 150,
+            "ref_y0": 2500,
+            "ref_x1": 550,
+            "ref_y1": 4500
+        }
+    elif instrument == "IIRS":
+        nominal_roi = {
+            "src_sample_start": 0,
+            "src_sample_end": 1104,
+            "src_line_start": 0,
+            "src_line_end": 2000,
+            "ref_x0": 0,
+            "ref_y0": 0,
+            "ref_x1": 600,
+            "ref_y1": 2000
+        }
     else:
         nominal_roi = {
             "src_sample_start": 0,

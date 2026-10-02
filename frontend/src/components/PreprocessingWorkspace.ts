@@ -74,26 +74,64 @@ export class PreprocessingWorkspace {
     this.attachDomEvents()
   }
 
+  private datasetSessions: Record<string, {
+    result: PreprocessResult | null
+    isProcessed: boolean
+    roi: { roi_src: [number, number, number, number]; roi_ref: [number, number, number, number] }
+  }> = {}
+
   public setActivePair(
     pairId: string,
     pairData: PairItem | null,
     roi?: { roi_src: [number, number, number, number]; roi_ref: [number, number, number, number] }
   ) {
-    const isNew = pairId !== this.activePairId
+    // 1. Strictly save outgoing dataset's preprocessing state
+    if (this.activePairId) {
+      this.datasetSessions[this.activePairId] = {
+        result: this.processedResult,
+        isProcessed: this.isProcessed,
+        roi: {
+          roi_src: [...this.configuredRoi.roi_src],
+          roi_ref: [...this.configuredRoi.roi_ref],
+        },
+      }
+    }
+
     this.activePairId = pairId
     this.pairData = pairData
     if (roi) {
       this.configuredRoi = { ...roi }
     }
-    if (isNew) {
+
+    const isIirs = pairId === 'pair_002' || pairData?.instrument === 'IIRS' || pairData?.product_type === 'HYPERSPECTRAL'
+
+    if (isIirs) {
       this.isProcessed = false
       this.processedResult = null
+      this.showIirsGuard()
+    } else {
+      this.hideIirsGuard()
+      // Check if target dataset already has its own preprocessed state for the active ROI
+      const existing = this.datasetSessions[pairId]
+      const roiMatches = existing &&
+        existing.roi.roi_src[0] === this.configuredRoi.roi_src[0] &&
+        existing.roi.roi_src[1] === this.configuredRoi.roi_src[1] &&
+        existing.roi.roi_src[2] === this.configuredRoi.roi_src[2] &&
+        existing.roi.roi_src[3] === this.configuredRoi.roi_src[3]
+
+      if (existing && existing.result && roiMatches) {
+        this.processedResult = existing.result
+        this.isProcessed = existing.isProcessed
+        this.displayImages(existing.result)
+      } else {
+        this.isProcessed = false
+        this.processedResult = null
+        this.runPreprocessing(false)
+      }
     }
+
     this.updateHeaderMeta()
     this.updateRoiDimensionsDisplay()
-    if (!this.processedResult) {
-      this.runPreprocessing(false)
-    }
   }
 
   public setRoi(roi: { roi_src: [number, number, number, number]; roi_ref: [number, number, number, number] }) {
@@ -723,6 +761,14 @@ export class PreprocessingWorkspace {
       if (result && result.status === 'ready') {
         this.processedResult = result
         this.isProcessed = true
+        this.datasetSessions[this.activePairId] = {
+          result,
+          isProcessed: true,
+          roi: {
+            roi_src: [...this.configuredRoi.roi_src],
+            roi_ref: [...this.configuredRoi.roi_ref],
+          },
+        }
 
         // Display images
         this.displayImages(result)

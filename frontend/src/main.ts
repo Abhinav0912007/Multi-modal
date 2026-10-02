@@ -811,6 +811,10 @@ const launchController = new LaunchController({
   onComplete: (metrics, artifacts) => {
     state.isProcessing = false
     state.metrics = metrics
+    const curId = state.systemStatus.activePair
+    if (datasetSessions[curId]) {
+      datasetSessions[curId].metrics = metrics
+    }
     state.systemStatus.processingStatus = 'COMPLETED'
     state.systemStatus.currentStage = 'REGISTRATION COMPLETE'
 
@@ -914,15 +918,15 @@ const datasetSessions: Record<string, DatasetSession> = {
   pair_002: {
     roi: {
       roi_src: [0, 2000, 0, 1104],
-      roi_ref: [3000, 5000, 100, 600],
+      roi_ref: [0, 2000, 0, 600],
     },
     metrics: null, // Strictly null for IIRS until band extracted
     isRoiApplied: false,
   },
   pair_003: {
     roi: {
-      roi_src: [20000, 24000, 1000, 3000],
-      roi_ref: [3000, 5000, 100, 600],
+      roi_src: [20000, 24000, 500, 3500],
+      roi_ref: [2500, 4500, 150, 550],
     },
     metrics: null,
     isRoiApplied: false,
@@ -1005,7 +1009,9 @@ const transformationAnalysis = new TransformationAnalysis(taMount, state.systemS
 
 // 15. Initialize Export & Artifacts Workspace
 const exportMount = document.querySelector<HTMLDivElement>('#export-workspace-mount')!
-const exportWorkspace = new ExportWorkspace(exportMount, state.systemStatus.activePair)
+const exportWorkspace = new ExportWorkspace(exportMount, state.systemStatus.activePair, (newPairId) => {
+  selectPair(newPairId)
+})
 
 // 16. Initialize Global Processing Drawer
 const processingDrawer = new ProcessingDrawer((tab) => switchTab(tab as ActiveTab))
@@ -1067,6 +1073,10 @@ jobService.subscribe((job) => {
         homography_matrix: job.matrix || null,
         spatial_coverage: '84.2%'
       }
+      const curId = state.systemStatus.activePair
+      if (datasetSessions[curId]) {
+        datasetSessions[curId].metrics = state.metrics
+      }
     }
     state.systemStatus.processingStatus = 'COMPLETED'
     state.systemStatus.currentStage = 'REGISTRATION COMPLETE'
@@ -1109,9 +1119,9 @@ function selectPair(pairId: string) {
   if (!datasetSessions[pairId]) {
     datasetSessions[pairId] = {
       roi: pairId === 'pair_002'
-        ? { roi_src: [0, 2000, 0, 1104], roi_ref: [3000, 5000, 100, 600] }
+        ? { roi_src: [0, 2000, 0, 1104], roi_ref: [0, 2000, 0, 600] }
         : pairId === 'pair_003'
-        ? { roi_src: [20000, 24000, 1000, 3000], roi_ref: [3000, 5000, 100, 600] }
+        ? { roi_src: [20000, 24000, 500, 3500], roi_ref: [2500, 4500, 150, 550] }
         : { roi_src: [42000, 46000, 1000, 7000], roi_ref: [3000, 5000, 100, 600] },
       metrics: null,
       isRoiApplied: false,
@@ -1134,7 +1144,7 @@ function selectPair(pairId: string) {
   roiExplorer.setActivePair(pairId, state.selectedPair)
   preprocessingWorkspace.setActivePair(pairId, state.selectedPair, configuredRoi)
   featureWorkspace.setActivePair(pairId, state.selectedPair, configuredRoi, datasetSessions[pairId].isRoiApplied)
-  spatialWorkspace.setActivePair(pairId)
+  spatialWorkspace.setActivePair(pairId, configuredRoi)
   alignmentStudio.setActivePair(pairId)
   transformationAnalysis.setActivePair(pairId)
   exportWorkspace.setPairId(pairId)

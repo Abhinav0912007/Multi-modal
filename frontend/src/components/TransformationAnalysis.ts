@@ -44,11 +44,53 @@ export class TransformationAnalysis {
     this.loadAnalysis()
   }
 
+  private datasetSessions: Record<string, Partial<Record<'homography' | 'affine', TransformationAnalysisResult>>> = {}
+
   public setActivePair(pairId: string) {
-    if (this.pairId !== pairId) {
-      this.pairId = pairId
-      const pairTag = this.rootEl.querySelector('#ta-pair-badge')
-      if (pairTag) pairTag.textContent = `TARGET: ${pairId.toUpperCase()}`
+    if (this.pairId && this.data) {
+      if (!this.datasetSessions[this.pairId]) this.datasetSessions[this.pairId] = {}
+      this.datasetSessions[this.pairId][this.transformType] = this.data
+    }
+
+    this.pairId = pairId
+    const pairTag = this.rootEl.querySelector('#ta-pair-badge')
+    if (pairTag) pairTag.textContent = `TARGET: ${pairId.toUpperCase()}`
+
+    if (pairId === 'pair_002') {
+      this.data = null
+      const gradeBadge = this.rootEl.querySelector('#ta-grade-badge') as HTMLElement
+      if (gradeBadge) {
+        gradeBadge.textContent = 'GRADE: N/A • BAND EXTRACTION REQUIRED'
+        gradeBadge.style.color = 'var(--amber-warning)'
+        gradeBadge.style.borderColor = 'var(--amber-warning)'
+        gradeBadge.style.background = 'rgba(245, 158, 11, 0.15)'
+      }
+      const contentArea = this.rootEl.querySelector('#ta-content-area') as HTMLDivElement
+      if (contentArea) {
+        contentArea.innerHTML = `
+          <div class="glass-panel" style="grid-column: 1 / -1; padding: 48px; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3);">
+            <div style="font-size: 36px; margin-bottom: 12px;">🪐</div>
+            <h3 style="font-family: var(--font-heading); color: var(--amber-warning); font-size: 18px; margin-bottom: 8px;">
+              CHANDRAYAAN-2 IIRS · HYPERSPECTRAL CUBE
+            </h3>
+            <p style="color: var(--text-muted); font-size: 13px; max-width: 600px; margin: 0 auto 16px auto;">
+              Transformation matrix estimation, Jacobian decomposition, and residual error analysis are disabled for PAIR_002 until a calibrated 2D spatial continuum band is extracted from the PDS QUB spectral cube.
+            </p>
+            <div style="display:inline-block; font-family: var(--font-mono); font-size: 11px; padding: 4px 12px; border-radius: 4px; background: rgba(245, 158, 11, 0.1); color: var(--amber-warning); border: 1px solid rgba(245, 158, 11, 0.2);">
+              STATUS: BAND EXTRACTION REQUIRED
+            </div>
+          </div>
+        `
+      }
+      return
+    }
+
+    if (this.datasetSessions[pairId]?.[this.transformType]) {
+      this.data = this.datasetSessions[pairId]![this.transformType]!
+      this.updateHeaderBadges()
+      this.renderFullDashboard()
+    } else {
+      this.data = null
       this.loadAnalysis()
     }
   }
@@ -185,6 +227,9 @@ export class TransformationAnalysis {
   }
 
   public async loadAnalysis() {
+    if (this.pairId === 'pair_002') return
+    const currentPairAtStart = this.pairId
+
     const contentArea = this.rootEl.querySelector('#ta-content-area') as HTMLDivElement
     contentArea.innerHTML = `
       <div class="ta-loading-state glass-panel" style="grid-column: 1 / -1; padding: 48px; text-align: center;">
@@ -199,7 +244,14 @@ export class TransformationAnalysis {
     `
 
     try {
-      this.data = await fetchTransformationAnalysis(this.pairId, this.transformType, this.ransacThresh)
+      const res = await fetchTransformationAnalysis(currentPairAtStart, this.transformType, this.ransacThresh)
+      if (this.pairId !== currentPairAtStart) {
+        // Discard: active pair was switched while this network request was in-flight
+        return
+      }
+      this.data = res
+      if (!this.datasetSessions[this.pairId]) this.datasetSessions[this.pairId] = {}
+      this.datasetSessions[this.pairId][this.transformType] = this.data
       this.updateHeaderBadges()
       this.renderFullDashboard()
     } catch (err: any) {

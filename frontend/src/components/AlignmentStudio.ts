@@ -160,11 +160,61 @@ export class AlignmentStudio {
     this.loadPairData()
   }
 
+  private datasetSessions: Record<string, {
+    data: AlignmentPairResult | null
+    params: AlignmentParameters
+    autoParams: AlignmentParameters
+    metrics: AlignmentMetrics
+  }> = {}
+
   public setActivePair(pairId: string) {
-    if (this.pairId !== pairId) {
-      this.pairId = pairId
-      const pairBadge = this.rootEl.querySelector('#align-pair-badge')
-      if (pairBadge) pairBadge.textContent = `TARGET: ${pairId.toUpperCase()}`
+    if (this.pairId) {
+      this.datasetSessions[this.pairId] = {
+        data: this.data,
+        params: { ...this.params },
+        autoParams: { ...this.autoParams },
+        metrics: { ...this.currentMetrics },
+      }
+    }
+
+    this.pairId = pairId
+    const pairBadge = this.rootEl.querySelector('#align-pair-badge')
+    if (pairBadge) pairBadge.textContent = `TARGET: ${pairId.toUpperCase()}`
+
+    const statusText = this.rootEl.querySelector('#align-status-text')
+    const statusPill = this.rootEl.querySelector('#align-status-pill')
+
+    if (pairId === 'pair_002') {
+      this.data = null
+      this.imgRef = null
+      this.imgSrc = null
+      this.imgAlignedBackend = null
+      if (statusText) statusText.textContent = 'IIRS HYPERSPECTRAL CUBE — BAND EXTRACTION REQUIRED'
+      if (statusPill) statusPill.className = 'status-pill status-warning'
+
+      // Clear canvases
+      if (this.ctxMain) this.ctxMain.clearRect(0, 0, this.mainCanvas.width, this.mainCanvas.height)
+      if (this.ctxSbsRef) this.ctxSbsRef.clearRect(0, 0, this.sbsCanvasRef.width, this.sbsCanvasRef.height)
+      if (this.ctxSbsAligned) this.ctxSbsAligned.clearRect(0, 0, this.sbsCanvasAligned.width, this.sbsCanvasAligned.height)
+
+      const rRmse = this.rootEl.querySelector('#readout-rmse')
+      const rNcc = this.rootEl.querySelector('#readout-ncc')
+      const rOverlap = this.rootEl.querySelector('#readout-overlap')
+      if (rRmse) rRmse.textContent = 'N/A'
+      if (rNcc) rNcc.textContent = 'N/A'
+      if (rOverlap) rOverlap.textContent = '0%'
+      return
+    }
+
+    if (this.datasetSessions[pairId]?.data) {
+      const sess = this.datasetSessions[pairId]
+      this.data = sess.data
+      this.params = { ...sess.params }
+      this.autoParams = { ...sess.autoParams }
+      this.currentMetrics = { ...sess.metrics }
+      this.loadPairData()
+    } else {
+      this.data = null
       this.loadPairData()
     }
   }
@@ -611,6 +661,12 @@ export class AlignmentStudio {
 
       this.currentMetrics = { ...this.data.after_metrics }
       this.syncControlsFromState()
+      this.datasetSessions[this.pairId] = {
+        data: this.data,
+        params: { ...this.params },
+        autoParams: { ...this.autoParams },
+        metrics: { ...this.currentMetrics },
+      }
 
       if (statusText) statusText.textContent = 'ALIGNED & VERIFIED'
       const statusPill = this.rootEl.querySelector('#align-status-pill')
