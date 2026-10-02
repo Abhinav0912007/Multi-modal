@@ -1340,7 +1340,7 @@ export class AlignmentStudio {
     const dShear = (this.params.shear_x - this.autoParams.shear_x) * 200
 
     const distSq = dDx * dDx + dDy * dDy + dRot * dRot + dScale * dScale + dShear * dShear
-    const baseRmse = this.data?.after_metrics.rmse || 0.84
+    const baseRmse = this.data?.after_metrics?.rmse ?? 0.84
     const simulatedRmse = Math.round((baseRmse + Math.sqrt(distSq) * 0.95) * 100) / 100
 
     const ncc = Math.max(0.2, Math.round((0.988 - Math.sqrt(distSq) * 0.025) * 1000) / 1000)
