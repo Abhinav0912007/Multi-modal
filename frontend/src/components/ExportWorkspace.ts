@@ -84,14 +84,14 @@ export class ExportWorkspace {
         <!-- TOP WORKSPACE HEADER & CONTROL HUD -->
         <div class="export-header-panel glass-panel">
           <div class="export-header-left">
-            <div class="badge-tech-tag">PHASE 10 &bull; STR-2026 ARCHIVE</div>
+            <div class="badge-tech-tag">EXPORT RESULTS</div>
             <h2 class="export-title">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              Export &amp; Artifacts Workspace
+              Export Results &amp; Planetary Deliverables
             </h2>
             <p class="export-subtitle">
               Verified Planetary Cartographic Product Suite &bull; Multi-Format Georeferenced Downloads &amp; PDS Reports
@@ -115,6 +115,31 @@ export class ExportWorkspace {
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
               Generate Scientific Report
+            </button>
+          </div>
+        </div>
+
+        <!-- DEDICATED DIRECT DOWNLOAD ACTION BUTTONS (SECTION 15) -->
+        <div class="export-quick-downloads-strip glass-panel" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:14px 20px; margin-bottom:16px;">
+          <div style="font-family:var(--font-heading); font-size:12px; color:var(--cyan-bright); letter-spacing:0.04em;">
+            PRIMARY SCIENTIFIC DELIVERABLES:
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px;">
+            <button id="btn-dl-registered" class="hud-btn" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-color:rgba(56,189,248,0.4); font-size:12px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Registered Image
+            </button>
+            <button id="btn-dl-matchpoints" class="hud-btn" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-color:rgba(56,189,248,0.4); font-size:12px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Match Points (CSV)
+            </button>
+            <button id="btn-dl-matrix" class="hud-btn" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-color:rgba(56,189,248,0.4); font-size:12px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Transformation (JSON)
+            </button>
+            <button id="btn-dl-report" class="hud-btn" style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-color:rgba(245,158,11,0.5); color:var(--isro-gold); font-size:12px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Download Full Report
             </button>
           </div>
         </div>
@@ -302,6 +327,34 @@ export class ExportWorkspace {
       } else {
         txtRepStatus.innerHTML = `<span class="badge-status-failed">NOT GENERATED</span>`
       }
+    }
+
+    // Direct Download Buttons (Section 15)
+    const regArt = this.artifacts.find((a) => a.id.includes('registered') || a.filename === 'registered.png')
+    const matchArt = this.artifacts.find((a) => a.id.includes('match_points') || a.filename === 'match_points.csv')
+    const matArt = this.artifacts.find((a) => a.id.includes('transformation_matrix') || a.filename === 'transformation_matrix.json')
+    const repArt = this.artifacts.find((a) => a.id.includes('report') && a.status === 'READY')
+
+    const btnReg = this.container.querySelector<HTMLButtonElement>('#btn-dl-registered')
+    const btnMatch = this.container.querySelector<HTMLButtonElement>('#btn-dl-matchpoints')
+    const btnMat = this.container.querySelector<HTMLButtonElement>('#btn-dl-matrix')
+    const btnRep = this.container.querySelector<HTMLButtonElement>('#btn-dl-report')
+
+    if (btnReg) {
+      btnReg.disabled = regArt?.status !== 'READY'
+      btnReg.onclick = () => { if (regArt?.download_url) window.location.href = regArt.download_url }
+    }
+    if (btnMatch) {
+      btnMatch.disabled = matchArt?.status !== 'READY'
+      btnMatch.onclick = () => { if (matchArt?.download_url) window.location.href = matchArt.download_url }
+    }
+    if (btnMat) {
+      btnMat.disabled = matArt?.status !== 'READY'
+      btnMat.onclick = () => { if (matArt?.download_url) window.location.href = matArt.download_url }
+    }
+    if (btnRep) {
+      btnRep.disabled = !repArt || repArt.status !== 'READY'
+      btnRep.onclick = () => { if (repArt?.download_url) window.location.href = repArt.download_url }
     }
   }
 

@@ -129,31 +129,11 @@ def run_pipeline(config, progress_callback=None):
     save_image(matches_vis, os.path.join(out_dir, "good_matches.png"))
 
     if len(good_matches) < 4:
-        report(6, 65, "Insufficient raw matches; synthesizing robust lunar tie-points for registration...")
-        h_s, w_s = src_proc.shape[:2]
-        h_r, w_r = ref_proc.shape[:2]
-        syn_src = []
-        syn_ref = []
-        syn_matches = []
-        step_y = max(20, h_s // 6)
-        step_x = max(20, w_s // 6)
-        match_idx = 0
-        for y in range(step_y, h_s - step_y, step_y):
-            for x in range(step_x, w_s - step_x, step_x):
-                rx = (x / float(max(1, w_s))) * w_r + np.random.uniform(-1.2, 1.2)
-                ry = (y / float(max(1, h_s))) * h_r + np.random.uniform(-1.2, 1.2)
-                syn_src.append([float(x), float(y)])
-                syn_ref.append([float(rx), float(ry)])
-                dmatch = cv2.DMatch(_queryIdx=match_idx, _trainIdx=match_idx, _distance=0.15)
-                syn_matches.append(dmatch)
-                match_idx += 1
-        src_pts = np.array(syn_src, dtype=np.float32)
-        ref_pts = np.array(syn_ref, dtype=np.float32)
-        good_matches = syn_matches
-        kp_src = [cv2.KeyPoint(x=p[0], y=p[1], size=10) for p in src_pts]
-        kp_ref = [cv2.KeyPoint(x=p[0], y=p[1], size=10) for p in ref_pts]
-        matches_vis = draw_matches_side_by_side(src_proc, kp_src, ref_proc, kp_ref, good_matches)
-        save_image(matches_vis, os.path.join(out_dir, "good_matches.png"))
+        raise ValueError(
+            f"INSUFFICIENT CORRESPONDENCES: Only {len(good_matches)} verified correspondences were found between source and reference. "
+            f"A minimum of 4 spatially distributed correspondences are required for geometric model estimation. "
+            f"Please adjust ROI or preprocessing parameters."
+        )
 
     # ── Step 7: Spatial Grid Filtering ───────────────────────────────
     grid_size = config.grid_size

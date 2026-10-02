@@ -229,7 +229,7 @@ export class AlignmentStudio {
         <div class="ws-header-left">
           <div class="ws-title-group">
             <span class="badge-chip" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-status); border: 1px solid rgba(16, 185, 129, 0.3);">
-              STAGE 06 & 07 • SCIENTIFIC ALIGNMENT STUDIO
+              ALIGNMENT
             </span>
             <span id="align-pair-badge" class="ws-pair-tag">TARGET: ${this.pairId.toUpperCase()}</span>
             <span class="status-pill status-ready" id="align-status-pill">
@@ -620,6 +620,42 @@ export class AlignmentStudio {
 
     try {
       this.data = await fetchAlignmentPair(this.pairId)
+
+      // Guard: Check if alignment estimation failed honestly
+      if (this.data.status === 'failed' || !this.data.matrix_3x3) {
+        if (statusText) statusText.textContent = 'ALIGNMENT FAILED'
+        const statusPill = this.rootEl.querySelector('#align-status-pill')
+        if (statusPill) statusPill.className = 'status-pill status-error'
+
+        const viewportBox = this.rootEl.querySelector('#align-viewport-box') as HTMLDivElement
+        if (viewportBox) {
+          viewportBox.innerHTML = `
+            <div class="glass-panel" style="padding: 48px; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3); margin: 20px; width: 100%;">
+              <div style="font-size: 36px; margin-bottom: 12px;">❌</div>
+              <h3 style="font-family: var(--font-heading); color: var(--rose-error); font-size: 18px; margin-bottom: 8px;">
+                ALIGNMENT FAILED
+              </h3>
+              <p style="color: var(--text-muted); font-size: 13px; max-width: 600px; margin: 0 auto 16px auto;">
+                Reason: ${this.data.failure_reason || "Insufficient verified correspondences or degenerate geometry to estimate valid homography."}
+              </p>
+              <div style="margin-top: 16px;">
+                <button id="align-btn-adjust-roi" class="btn-hero-secondary" style="margin: 0 auto; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 20px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--cyan-bright); color: #fff;">
+                  <span>Adjust ROI &rarr;</span>
+                </button>
+              </div>
+            </div>
+          `
+          const btnRoi = viewportBox.querySelector('#align-btn-adjust-roi')
+          if (btnRoi) {
+            btnRoi.addEventListener('click', () => {
+              const roiBtn = document.querySelector<HTMLButtonElement>('#nav-btn-roi')
+              if (roiBtn) roiBtn.click()
+            })
+          }
+        }
+        return
+      }
+
       this.autoParams = { ...this.data.auto_parameters }
       this.params = { ...this.data.auto_parameters }
 

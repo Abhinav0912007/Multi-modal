@@ -153,10 +153,10 @@ export class SpatialWorkspace {
       <header class="ws-header-bar glass-panel">
         <div class="ws-header-left">
           <div class="ws-title-group">
-            <span class="badge-chip">STAGE 05 • SPATIAL REGULARIZATION</span>
+            <span class="badge-chip">SPATIAL ANALYSIS</span>
             <span id="sp-pair-badge" class="ws-pair-tag">TARGET: ${this.pairId.toUpperCase()}</span>
           </div>
-          <h2 class="ws-heading">Spatial Grid & Inlier Density Analysis</h2>
+          <h2 class="ws-heading">Spatial Distribution &amp; Inlier Coverage Analysis</h2>
         </div>
 
         <div class="ws-header-center">

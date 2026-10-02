@@ -444,6 +444,17 @@ export interface AlignmentParameters {
 
 export interface AlignmentPairResult {
   status: string
+  validation_state?: string
+  failure_reason?: string
+  minimal_constraint_warning?: string
+  subpixel_refinement?: {
+    executed: boolean
+    algorithm?: string
+    points_refined?: number
+    mean_subpixel_shift_px?: number
+    max_subpixel_shift_px?: number
+    error?: string
+  }
   pair_id: string
   is_simulated: boolean
   dimensions: { width: number; height: number }
@@ -451,7 +462,7 @@ export interface AlignmentPairResult {
   reference_image: string
   aligned_image: string
   auto_parameters: AlignmentParameters
-  matrix_3x3: number[][]
+  matrix_3x3: number[][] | null
   inliers_count: number
   total_matches: number
   before_metrics: AlignmentMetrics
@@ -633,22 +644,33 @@ export interface MatrixElement {
 export interface TransformationAnalysisResult {
   status: string
   pair_id: string
-  is_simulated: boolean
+  is_simulated?: boolean
+  validation_state?: string
+  validation_reason?: string
+  failure_reason?: string
   dimensions: { width: number; height: number }
-  transform_type: 'homography' | 'affine'
-  transform_type_label: string
-  degrees_of_freedom: number
-  matrix_3x3: number[][]
-  matrix_layout: MatrixElement[][]
-  matrix_latex: string
-  properties: {
+  transform_type?: 'homography' | 'affine'
+  transform_type_label?: string
+  degrees_of_freedom?: number
+  matrix_3x3: number[][] | null
+  matrix_layout?: MatrixElement[][]
+  matrix_latex?: string
+  images?: {
+    source?: string
+    reference?: string
+    registered?: string
+    overlay?: string
+    difference?: string
+    checkerboard?: string
+  }
+  properties?: {
     determinant: number
     condition_number: number
     singular_values: number[]
     is_invertible: boolean
     area_dilation_factor: number
   }
-  parameters: {
+  parameters?: {
     dx_px: number
     dy_px: number
     dx_meters: number

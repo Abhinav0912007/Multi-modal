@@ -340,15 +340,9 @@ def get_alignment_pair(pair_id: str):
     matrix = None
     inliers_count = 0
     total_matches = 0
-    decomp = {
-        "dx": 0.0,
-        "dy": 0.0,
-        "rotation_deg": 0.0,
-        "scale_x": 1.0,
-        "scale_y": 1.0,
-        "shear_x": 0.0,
-        "shear_y": 0.0
-    }
+    reproj_errs = None
+    inliers_mask = None
+    decomp = None
 
     if des_src is not None and des_ref is not None and len(kp_src) >= 4 and len(kp_ref) >= 4:
         good = match_descriptors(des_src, des_ref, matcher_type="FLANN", ratio_thresh=0.75)
@@ -359,30 +353,78 @@ def get_alignment_pair(pair_id: str):
                 matrix, inliers_mask, reproj_errs = estimate_transformation_ransac(
                     s_pts, r_pts, transform_type="homography", ransac_thresh=3.0
                 )
-                inliers_count = int(np.count_nonzero(inliers_mask))
-                decomp = _decompose_affine_matrix(matrix, w, h)
+                if inliers_mask is not None:
+                    inliers_count = int(np.count_nonzero(inliers_mask))
+                if matrix is not None:
+                    decomp = _decompose_affine_matrix(matrix, w, h)
             except Exception as e:
                 print(f"[Alignment API] RANSAC error: {e}")
 
-    # Fallback to known physical lunar offset if RANSAC didn't converge
-    if matrix is None:
-        decomp = {
-            "dx": 14.5,
-            "dy": -9.2,
-            "rotation_deg": 2.45,
-            "scale_x": 1.025,
-            "scale_y": 1.025,
-            "shear_x": 0.012,
-            "shear_y": 0.0
-        }
-        M3 = _build_matrix_from_params(w, h, decomp["dx"], decomp["dy"],
-                                       decomp["rotation_deg"], decomp["scale_x"], decomp["scale_y"],
-                                       decomp["shear_x"], decomp["shear_y"])
-        matrix = M3
+    # Honest scientific failure handling: Do not fabricate a transformation matrix
+    if matrix is None or inliers_count < 4:
+        failure_reason = "Insufficient valid correspondences or degenerate geometry to estimate valid homography."
+        if total_matches < 4:
+            failure_reason = f"Only {total_matches} verified correspondences were found (minimum 4 required for geometric model)."
 
-    # Generate auto-aligned warped image
-    M_warp = matrix[:2, :] if matrix.shape[0] == 3 else matrix
-    warped_aligned = cv2.warpAffine(src_proc, M_warp, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+        return {
+            "status": "failed",
+            "validation_state": "ALIGNMENT_FAILED",
+            "failure_reason": failure_reason,
+            "pair_id": pair_id,
+            "is_simulated": is_sim,
+            "dimensions": {"width": w, "height": h},
+            "source_image": _encode_image(src_proc),
+            "reference_image": _encode_image(ref_proc),
+            "aligned_image": "",
+            "matrix_3x3": None,
+            "inliers_count": inliers_count,
+            "total_matches": total_matches,
+            "auto_parameters": None,
+            "before_metrics": _compute_alignment_metrics(ref_proc, src_proc),
+            "after_metrics": None,
+            "subpixel_refinement": None,
+            "minimal_constraint_warning": None,
+        }
+
+    # Sub-pixel Refinement (Lucas-Kanade optical patch optimization)
+    subpix_info = None
+    if inliers_count >= 4 and inliers_mask is not None:
+        try:
+            inlier_src = s_pts[inliers_mask]
+            inlier_ref = r_pts[inliers_mask]
+            refined_ref, shifts = refine_matches_lucas_kanade(src_proc, ref_proc, inlier_src, inlier_ref)
+            mean_shift = float(np.mean(shifts)) if len(shifts) > 0 else 0.0
+            max_shift = float(np.max(shifts)) if len(shifts) > 0 else 0.0
+            subpix_info = {
+                "executed": True,
+                "algorithm": "Lucas-Kanade Optical Gradient Refinement",
+                "points_refined": len(refined_ref),
+                "mean_subpixel_shift_px": round(mean_shift, 4),
+                "max_subpixel_shift_px": round(max_shift, 4),
+            }
+        except Exception as err:
+            subpix_info = {
+                "executed": False,
+                "error": str(err)
+            }
+
+    # Residual validation: Check for minimal homography (4 points produce 0 residual by construction)
+    is_minimal = (inliers_count == 4)
+    minimal_warning = (
+        "Residual is not independently validated because the model is minimally constrained (4 points)."
+        if is_minimal else None
+    )
+
+    inlier_errors = reproj_errs[inliers_mask] if (reproj_errs is not None and inliers_mask is not None) else np.array([0.0])
+    mean_err = float(np.mean(inlier_errors)) if len(inlier_errors) > 0 else 0.0
+    rmse_err = float(np.sqrt(np.mean(inlier_errors ** 2))) if len(inlier_errors) > 0 else 0.0
+    max_err = float(np.max(inlier_errors)) if len(inlier_errors) > 0 else 0.0
+
+    # Generate authentic warped image using projective perspective warping
+    if matrix.shape == (3, 3):
+        warped_aligned = cv2.warpPerspective(src_proc, matrix, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    else:
+        warped_aligned = cv2.warpAffine(src_proc, matrix[:2, :], (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
     # Compute Before metrics (unaligned identity) vs After metrics (optimal alignment)
     before_metrics = _compute_alignment_metrics(ref_proc, src_proc)
@@ -395,6 +437,7 @@ def get_alignment_pair(pair_id: str):
 
     return {
         "status": "success",
+        "validation_state": "VALID_ALIGNMENT",
         "pair_id": pair_id,
         "is_simulated": is_sim,
         "dimensions": {"width": w, "height": h},
@@ -405,6 +448,11 @@ def get_alignment_pair(pair_id: str):
         "matrix_3x3": matrix.tolist() if isinstance(matrix, np.ndarray) else matrix,
         "inliers_count": inliers_count,
         "total_matches": total_matches,
+        "rmse": round(rmse_err, 4),
+        "mean_reprojection_error": round(mean_err, 4),
+        "max_residual": round(max_err, 4),
+        "subpixel_refinement": subpix_info,
+        "minimal_constraint_warning": minimal_warning,
         "before_metrics": before_metrics,
         "after_metrics": after_metrics,
     }

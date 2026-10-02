@@ -105,7 +105,7 @@ export class TransformationAnalysis {
         <div class="ws-header-left">
           <div class="ws-title-group">
             <span class="badge-chip" style="background: rgba(56, 189, 248, 0.15); color: var(--cyan-bright); border: 1px solid rgba(56, 189, 248, 0.3);">
-              STAGE 06 & 07 • MATHEMATICAL ANALYSIS
+              TRANSFORMATION
             </span>
             <span id="ta-pair-badge" class="ws-pair-tag">TARGET: ${this.pairId.toUpperCase()}</span>
             <span id="ta-grade-badge" class="badge-counter" style="background: rgba(16, 185, 129, 0.2); color: var(--emerald-status); border: 1px solid rgba(16, 185, 129, 0.4); font-weight:700;">
@@ -117,7 +117,7 @@ export class TransformationAnalysis {
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <path d="M7 8h10M7 12h10M7 16h10"/>
             </svg>
-            Scientific Transformation Analysis & Precision Geodesy
+            Transformation &amp; Registered Image Analysis
           </h2>
         </div>
 
@@ -285,6 +285,42 @@ export class TransformationAnalysis {
     if (!this.data) return
     const contentArea = this.rootEl.querySelector('#ta-content-area') as HTMLDivElement
     const d = this.data
+
+    // Guard: Insufficient correspondences or failed geometric estimation
+    if (!d.matrix_3x3 || !d.properties || !d.parameters || d.status === 'insufficient' || d.validation_state === 'INSUFFICIENT') {
+      const gradeBadge = this.rootEl.querySelector('#ta-grade-badge') as HTMLElement
+      if (gradeBadge) {
+        gradeBadge.textContent = 'GRADE: N/A • INSUFFICIENT'
+        gradeBadge.style.color = 'var(--amber-warning)'
+        gradeBadge.style.borderColor = 'var(--amber-warning)'
+        gradeBadge.style.background = 'rgba(245, 158, 11, 0.15)'
+      }
+      contentArea.innerHTML = `
+        <div class="glass-panel" style="grid-column: 1 / -1; padding: 48px; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3);">
+          <div style="font-size: 36px; margin-bottom: 12px;">⚠️</div>
+          <h3 style="font-family: var(--font-heading); color: var(--amber-warning); font-size: 18px; margin-bottom: 8px;">
+            INSUFFICIENT CORRESPONDENCES
+          </h3>
+          <p style="color: var(--text-muted); font-size: 13px; max-width: 600px; margin: 0 auto 16px auto;">
+            ${d.validation_reason || "Only a limited number of verified correspondences were found between source and reference. Additional spatially distributed correspondences are required before geometric transformation can be estimated."}
+          </p>
+          <div style="margin-top: 16px;">
+            <button id="ta-btn-adjust-roi" class="btn-hero-secondary" style="margin: 0 auto; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px 20px; border-radius: 6px; background: rgba(56, 189, 248, 0.15); border: 1px solid var(--cyan-bright); color: #fff;">
+              <span>Adjust ROI &rarr;</span>
+            </button>
+          </div>
+        </div>
+      `
+      const btnRoi = contentArea.querySelector('#ta-btn-adjust-roi')
+      if (btnRoi) {
+        btnRoi.addEventListener('click', () => {
+          const roiBtn = document.querySelector<HTMLButtonElement>('#nav-btn-roi')
+          if (roiBtn) roiBtn.click()
+        })
+      }
+      return
+    }
+
     const m = d.matrix_3x3
     const p = d.parameters
     const s = d.residual_statistics
@@ -292,6 +328,43 @@ export class TransformationAnalysis {
     const c = d.coordinate_system
 
     contentArea.innerHTML = `
+      <!-- ROW 0: REGISTERED LUNAR IMAGERY & MULTI-VIEW COMPARISON -->
+      <section class="ta-image-comparison-section glass-panel corner-reticle" style="grid-column: 1 / -1; padding: 20px; margin-bottom: 20px;">
+        <div class="ta-section-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="ta-icon-bubble" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-status);">🛰️</div>
+            <div>
+              <h3 class="ta-section-title" style="margin:0; font-size:16px;">Registered Lunar Terrain Visualization</h3>
+              <p class="ta-section-subtitle" style="margin:4px 0 0 0; font-size:12px; color:var(--text-muted);">
+                Authentic transformed source raster coregistered against reference basemap using estimated matrix.
+              </p>
+            </div>
+          </div>
+          <div class="ta-comp-mode-pills" style="display:flex; gap:6px;">
+            <button id="ta-view-before" class="hud-btn" data-vmode="before">Before</button>
+            <button id="ta-view-after" class="hud-btn active" data-vmode="after">After</button>
+            <button id="ta-view-overlay" class="hud-btn" data-vmode="overlay">Overlay</button>
+            <button id="ta-view-diff" class="hud-btn" data-vmode="difference">Difference</button>
+            <button id="ta-view-checker" class="hud-btn" data-vmode="checkerboard">Checkerboard</button>
+          </div>
+        </div>
+
+        <div class="ta-image-view-stage" style="display:flex; gap:16px; align-items:center; justify-content:center; background:#040711; border-radius:8px; padding:16px; border:1px solid rgba(255,255,255,0.06); min-height:360px;">
+          <div class="ta-comp-pane" style="text-align:center; flex:1; max-width:600px;">
+            <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan-bright); margin-bottom:8px;" id="ta-active-img-label">
+              REGISTERED SOURCE (HOMOGRAPHY WARPED)
+            </div>
+            <img id="ta-active-comp-img" src="data:image/png;base64,${d.images?.registered || d.images?.source || ''}" alt="Lunar Coregistered View" style="max-width:100%; max-height:420px; border-radius:4px; border:1px solid rgba(56,189,248,0.3); object-fit:contain; box-shadow:0 8px 24px rgba(0,0,0,0.6);" />
+          </div>
+          <div class="ta-comp-ref-pane" style="text-align:center; flex:1; max-width:600px;">
+            <div style="font-family:var(--font-mono); font-size:11px; color:var(--isro-gold); margin-bottom:8px;">
+              LUNAR REFERENCE BASEMAP (LROC)
+            </div>
+            <img src="data:image/png;base64,${d.images?.reference || ''}" alt="LROC Reference" style="max-width:100%; max-height:420px; border-radius:4px; border:1px solid rgba(245,158,11,0.3); object-fit:contain; box-shadow:0 8px 24px rgba(0,0,0,0.6);" />
+          </div>
+        </div>
+      </section>
+
       <!-- ROW 1: TRANSFORMATION MATRIX & MATHEMATICAL VISUALIZATION -->
       <section class="ta-matrix-section glass-panel corner-reticle">
         <div class="ta-section-header">
@@ -771,9 +844,43 @@ export class TransformationAnalysis {
     `
 
     // Setup interactive events for the rendered elements
+    this.setupImageComparisonEvents()
     this.setupMatrixInspectorEvents()
     this.initResidualPlot()
     this.initHistogramPlot()
+  }
+
+  private setupImageComparisonEvents() {
+    if (!this.data || !this.data.images) return
+    const imgs = this.data.images
+    const imgEl = this.rootEl.querySelector<HTMLImageElement>('#ta-active-comp-img')
+    const labelEl = this.rootEl.querySelector<HTMLDivElement>('#ta-active-img-label')
+    const modeBtns = this.rootEl.querySelectorAll<HTMLButtonElement>('.ta-comp-mode-pills .hud-btn')
+
+    modeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        modeBtns.forEach((b) => b.classList.remove('active'))
+        btn.classList.add('active')
+        const mode = btn.dataset.vmode
+
+        if (mode === 'before') {
+          if (imgEl) imgEl.src = `data:image/png;base64,${imgs.source}`
+          if (labelEl) labelEl.textContent = 'SOURCE RASTER (BEFORE REGISTRATION)'
+        } else if (mode === 'after') {
+          if (imgEl) imgEl.src = `data:image/png;base64,${imgs.registered || imgs.source}`
+          if (labelEl) labelEl.textContent = 'REGISTERED SOURCE (AFTER HOMOGRAPHY)'
+        } else if (mode === 'overlay') {
+          if (imgEl) imgEl.src = `data:image/png;base64,${imgs.overlay || imgs.registered || imgs.source}`
+          if (labelEl) labelEl.textContent = 'BLENDED OVERLAY (50% SOURCE / 50% REFERENCE)'
+        } else if (mode === 'difference') {
+          if (imgEl) imgEl.src = `data:image/png;base64,${imgs.difference || imgs.registered || imgs.source}`
+          if (labelEl) labelEl.textContent = 'RESIDUAL PIXEL DIFFERENCE HEATMAP'
+        } else if (mode === 'checkerboard') {
+          if (imgEl) imgEl.src = `data:image/png;base64,${imgs.checkerboard || imgs.registered || imgs.source}`
+          if (labelEl) labelEl.textContent = 'CHECKERBOARD MOSAIC COMPARISON (64px)'
+        }
+      })
+    })
   }
 
   private setupMatrixInspectorEvents() {
@@ -802,7 +909,7 @@ export class TransformationAnalysis {
     // Quick copy LaTeX button inside matrix
     const copyLatexBtn = this.rootEl.querySelector('#ta-copy-latex-btn')
     copyLatexBtn?.addEventListener('click', () => {
-      if (this.data) {
+      if (this.data && this.data.matrix_latex) {
         navigator.clipboard.writeText(this.data.matrix_latex)
         this.showToast('Copied LaTeX matrix representation to clipboard!')
       }
@@ -1204,7 +1311,7 @@ export class TransformationAnalysis {
   // EXPORT & COPY ACTION HANDLERS
   // ---------------------------------------------------------------------------
   private handleCopyMatrix() {
-    if (!this.data) return
+    if (!this.data || !this.data.matrix_3x3) return
     const m = this.data.matrix_3x3
 
     // Format conceptual ASCII mathematical layout
@@ -1219,9 +1326,9 @@ export class TransformationAnalysis {
   }
 
   private handleExportMatrix() {
-    if (!this.data) return
+    if (!this.data || !this.data.matrix_3x3) return
     const m = this.data.matrix_3x3
-    const text = `# ISRO Chandrayaan TMC Geometric Transformation Matrix\n# Target Pair: ${this.pairId}\n# Model: ${this.data.transform_type_label}\n# Format: 3x3 Homography Matrix (a11, a12, tx; a21, a22, ty; h31, h32, h33)\n\n${m[0].join('\t')}\n${m[1].join('\t')}\n${m[2].join('\t')}\n`
+    const text = `# ISRO Chandrayaan TMC Geometric Transformation Matrix\n# Target Pair: ${this.pairId}\n# Model: ${this.data.transform_type_label || 'Homography'}\n# Format: 3x3 Homography Matrix (a11, a12, tx; a21, a22, ty; h31, h32, h33)\n\n${m[0].join('\t')}\n${m[1].join('\t')}\n${m[2].join('\t')}\n`
 
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)

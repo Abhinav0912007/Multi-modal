@@ -1,14 +1,9 @@
-"""
-Router: /api/transformation — Scientific Transformation Analysis
-Provides complete geometric transformation matrix extraction, matrix decomposition,
-residual error statistics, error distributions, coordinate system metadata,
-and scientific export packages.
-"""
-
 import os
 import sys
 import math
 import json
+import base64
+import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -22,10 +17,18 @@ from backend.routers.alignment import _load_or_synthesize_pair, _decompose_affin
 from backend.processing.feature_matching import detect_sift_features, match_descriptors, extract_matched_coordinates
 from backend.processing.spatial_filter import filter_matches_by_spatial_grid
 from backend.processing.registration import estimate_transformation_ransac
+from backend.processing.visualization import create_checkerboard, save_image
+from backend.processing.evaluation import save_metrics_json, save_transformation_matrix, save_match_points_csv
 
 router = APIRouter(prefix="/api/transformation", tags=["transformation"])
 
 LUNAR_PIXEL_GSD_METERS = 5.0  # Chandrayaan-1 TMC nominal nadir ground sampling distance (5.0 m/px)
+
+
+def _encode_image(img_array: np.ndarray) -> str:
+    """Encodes an 8-bit array to a base64 PNG data string."""
+    _, buffer = cv2.imencode(".png", img_array)
+    return base64.b64encode(buffer).decode("utf-8")
 
 
 class TransformationRequest(BaseModel):
@@ -85,54 +88,114 @@ def _compute_transformation_solution(pair_id: str, transform_type: str = "homogr
             except Exception as e:
                 print(f"[Transformation API] RANSAC error: {e}")
 
-    # Fallback to physical lunar satellite ephemeris solution if RANSAC didn't find sufficient points
-    if matrix is None or reproj_errors is None:
-        # Physical lunar orbit baseline transformation:
-        # dx = 14.5 px, dy = -9.2 px, rot = 2.45 deg, scale = 1.025
-        cx, cy = w / 2.0, h / 2.0
-        rad = math.radians(2.45)
-        cos_t = math.cos(rad) * 1.025
-        sin_t = math.sin(rad) * 1.025
-        kx = 0.012
-
-        # 3x3 Affine / Homography matrix
-        matrix = np.array([
-            [cos_t, -sin_t + kx, 14.5],
-            [sin_t, cos_t, -9.2],
-            [0.0, 0.0, 1.0]
-        ], dtype=np.float64)
-
-        # Generate realistic correspondence points for residual analysis
-        np.random.seed(42)
-        n_synthetic_pts = 120
-        filt_src_pts = np.random.uniform(40, w - 40, (n_synthetic_pts, 2)).astype(np.float32)
-        
-        # Project through matrix
-        src_hom = np.hstack([filt_src_pts, np.ones((n_synthetic_pts, 1), dtype=np.float32)])
-        proj_clean = (matrix @ src_hom.T).T
-        proj_clean = proj_clean[:, :2] / proj_clean[:, 2:3]
-
-        # Add Gaussian measurement noise (mean ~0.8 px)
-        noise = np.random.normal(0, 0.75, (n_synthetic_pts, 2)).astype(np.float32)
-        filt_ref_pts = proj_clean + noise
-
-        # Inject 10% outliers
-        n_outliers = int(n_synthetic_pts * 0.12)
-        outlier_indices = np.random.choice(n_synthetic_pts, n_outliers, replace=False)
-        filt_ref_pts[outlier_indices] += np.random.uniform(-18.0, 18.0, (n_outliers, 2))
-
-        diffs = filt_ref_pts - proj_clean
-        reproj_errors = np.linalg.norm(diffs, axis=1)
-        inliers_mask = reproj_errors <= ransac_thresh
+    # Honest scientific failure handling: Do not fabricate a transformation matrix
+    if matrix is None or reproj_errors is None or inliers_mask is None or np.count_nonzero(inliers_mask) < 4:
+        return {
+            "status": "insufficient",
+            "validation_state": "INSUFFICIENT",
+            "validation_reason": "Insufficient verified correspondences (minimum 4 required for geometric model estimation).",
+            "pair_id": pair_id,
+            "dimensions": {"width": w, "height": h},
+            "matrix_3x3": None,
+            "images": {
+                "source": _encode_image(src_proc),
+                "reference": _encode_image(ref_proc),
+                "registered": "",
+                "overlay": "",
+                "checkerboard": "",
+                "difference": "",
+            },
+            "parameters": None,
+            "residual_statistics": {
+                "inliers_count": 0,
+                "outliers_count": len(filt_src_pts),
+                "total_candidates": len(filt_src_pts),
+                "inlier_ratio": 0.0,
+                "inlier_percentage": 0.0,
+                "min_error": 0.0,
+                "max_error": 0.0,
+                "mean_error": 0.0,
+                "median_error": 0.0,
+                "std_error": 0.0,
+                "variance": 0.0,
+                "rmse": 0.0,
+                "mad": 0.0,
+                "q1": 0.0,
+                "q3": 0.0,
+                "iqr": 0.0,
+                "p95": 0.0,
+                "p99": 0.0,
+            },
+            "error_metrics": {
+                "rmse_px": 0.0,
+                "rmse_meters": 0.0,
+                "mean_reproj_error_px": 0.0,
+                "mean_reproj_error_meters": 0.0,
+                "max_reproj_error_px": 0.0,
+                "max_reproj_error_meters": 0.0,
+                "subpixel_accuracy": False,
+                "quality_rating": "INSUFFICIENT CORRESPONDENCES",
+                "quality_grade": "N/A",
+                "status_color": "var(--amber-warning)",
+                "ransac_threshold_px": ransac_thresh,
+                "spatial_coverage_percentage": 0.0,
+            },
+            "coordinate_system": {
+                "source_crs": "IAU2000:30100 (Moon 2000 Equidistant Cylindrical)",
+                "source_instrument": f"{pair_id.upper()} Sensor Frame",
+                "source_resolution": "5.0 m/px",
+                "reference_crs": "IAU2000:30100 (Moon 2000 Equidistant Cylindrical)",
+                "reference_instrument": "NASA LRO LROC Baseline",
+                "reference_resolution": "5.0 m/px",
+                "datum": "Moon 2000 Reference Sphere",
+                "registration_origin": "Top-Left (0.0, 0.0)",
+                "mapping_equation": "\\mathbf{x}' \\sim \\mathbf{H} \\mathbf{x}",
+                "spatial_units": "Pixels [Image Space] / Meters [Surface]",
+                "interpolation_kernel": "Bicubic Spline"
+            },
+            "error_distribution": [],
+            "residuals": [],
+            "transformation_summary": {
+                "mission": "ISRO Lunar Exploration Mission",
+                "experiment": "Multi-Modal Scientific Coregistration",
+                "solution_status": "INSUFFICIENT CORRESPONDENCES",
+                "algorithm": "SIFT + FLANN + Projective RANSAC",
+                "verification_note": "Geometric model cannot be estimated without at least 4 spatially distributed correspondences.",
+                "mathematical_fidelity": "Model estimation halted prior to non-invertible matrix degradation."
+            }
+        }
 
     # Ensure 3x3 matrix shape
     if matrix.shape == (2, 3):
         m3x3 = np.vstack([matrix, [0.0, 0.0, 1.0]])
     else:
         m3x3 = matrix.copy()
-        # Normalize so bottom-right element is 1.0 if non-zero
         if abs(m3x3[2, 2]) > 1e-9:
             m3x3 = m3x3 / m3x3[2, 2]
+
+    # Generate authentic registered products using projective perspective warping
+    if m3x3.shape == (3, 3):
+        warped_src = cv2.warpPerspective(src_proc, m3x3, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    else:
+        warped_src = cv2.warpAffine(src_proc, m3x3[:2, :], (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+    # Blended Overlay (50% source + 50% reference)
+    overlay_img = cv2.addWeighted(ref_proc, 0.5, warped_src, 0.5, 0)
+
+    # Checkerboard Pattern (64px alternating grid)
+    checker_img = create_checkerboard(ref_proc, warped_src, square_size=64)
+
+    # Difference Heatmap (absolute discrepancy with colormap)
+    diff_raw = cv2.absdiff(ref_proc, warped_src)
+    diff_color = cv2.applyColorMap(diff_raw, cv2.COLORMAP_TURBO)
+
+    # Persist authentic scientific deliverables to disk
+    os.makedirs(out_dir, exist_ok=True)
+    save_image(warped_src, os.path.join(out_dir, "registered.png"))
+    save_image(overlay_img, os.path.join(out_dir, "overlay.png"))
+    save_image(checker_img, os.path.join(out_dir, "checkerboard.png"))
+    save_image(diff_color, os.path.join(out_dir, "difference.png"))
+    save_transformation_matrix(m3x3, transform_type, os.path.join(out_dir, "transformation_matrix.json"))
 
     # Decompose matrix into human-interpretable scientific parameters
     decomp = _decompose_affine_matrix(m3x3, w, h)
@@ -384,6 +447,15 @@ def _compute_transformation_solution(pair_id: str, transform_type: str = "homogr
             "spatial_units": "Pixels [Image Space] / Meters [Lunar Surface Projection]",
             "interpolation_kernel": "Bicubic Spline (cv2.INTER_CUBIC)"
         },
+        "validation_state": "VALID_REGISTRATION",
+        "images": {
+            "source": _encode_image(src_proc),
+            "reference": _encode_image(ref_proc),
+            "registered": _encode_image(warped_src),
+            "overlay": _encode_image(overlay_img),
+            "checkerboard": _encode_image(checker_img),
+            "difference": _encode_image(diff_color),
+        },
         "error_distribution": bin_items,
         "residuals": display_residuals,
         "transformation_summary": {
@@ -406,6 +478,8 @@ def get_transformation_analysis(
     """Retrieves full scientific transformation analysis for the specified pair."""
     try:
         return _compute_transformation_solution(pair_id, transform_type=transform_type, ransac_thresh=ransac_thresh)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transformation analysis failed: {str(e)}")
 
@@ -415,6 +489,8 @@ def analyze_transformation_custom(req: TransformationRequest):
     """Computes transformation analysis with custom parameters."""
     try:
         return _compute_transformation_solution(req.pair_id, transform_type=req.transform_type, ransac_thresh=req.ransac_thresh)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transformation analysis failed: {str(e)}")
 
