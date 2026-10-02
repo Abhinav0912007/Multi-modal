@@ -155,17 +155,17 @@ export class ProcessingDrawer {
           </div>
 
           <div class="drawer-header-actions">
-            <div id="drawer-timer-val" class="drawer-timer-badge">
+            <div id="drawer-timer-val" class="drawer-timer-badge" aria-label="Elapsed pipeline time">
               ${this.formatTime(this.secondsElapsed)}
             </div>
-            <button id="btn-minimize-drawer" class="drawer-ctrl-btn" title="Minimize to background pill">_</button>
-            <button id="btn-close-drawer" class="drawer-ctrl-btn" title="Dismiss panel">✕</button>
+            <button id="btn-minimize-drawer" class="drawer-ctrl-btn" aria-label="Minimize processing drawer" title="Minimize to background pill">_</button>
+            <button id="btn-close-drawer" class="drawer-ctrl-btn" aria-label="Close processing drawer" title="Dismiss panel">✕</button>
           </div>
         </div>
 
         <!-- Progress Bar -->
         <div class="drawer-progress-container">
-          <div class="drawer-progress-track">
+          <div class="drawer-progress-track" role="progressbar" aria-valuenow="${job.progress}" aria-valuemin="0" aria-valuemax="100" aria-label="Registration pipeline progress">
             <div class="drawer-progress-fill ${job.status}" style="width: ${job.progress}%;"></div>
           </div>
           <div class="drawer-progress-labels">
@@ -175,15 +175,15 @@ export class ProcessingDrawer {
         </div>
 
         <!-- Stages Checklist -->
-        <div class="drawer-stages-grid">
+        <div class="drawer-stages-grid" role="list">
           ${stagesHtml}
         </div>
 
         <!-- Logs Toggle & Terminal -->
         <div class="drawer-logs-section">
-          <button id="btn-toggle-logs" class="drawer-logs-toggle">
+          <button id="btn-toggle-logs" class="drawer-logs-toggle" aria-expanded="${this.isExpandedLogs}" aria-label="Toggle terminal logs">
             <span>Terminal Telemetry (${job.logs ? job.logs.length : 0} lines)</span>
-            <span>${this.isExpandedLogs ? '▼' : '▶'}</span>
+            <span aria-hidden="true">${this.isExpandedLogs ? '▼' : '▶'}</span>
           </button>
           ${this.isExpandedLogs ? `
             <div class="drawer-terminal-log">

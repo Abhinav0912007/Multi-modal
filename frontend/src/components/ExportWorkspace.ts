@@ -25,6 +25,7 @@ import {
   fetchStructuredScientificReport,
   API_BASE,
 } from '../api'
+import { renderEmptyDatasetState, showHumanToast } from '../services/errorHandler'
 
 export class ExportWorkspace {
   private container: HTMLElement
@@ -306,11 +307,26 @@ export class ExportWorkspace {
         : this.artifacts.filter((a) => a.category === this.selectedCategory)
 
     if (filtered.length === 0) {
-      listEl.innerHTML = `
-        <div class="empty-state">
-          <p>No artifacts found matching category: <strong>${this.selectedCategory}</strong></p>
-        </div>
-      `
+      listEl.innerHTML = renderEmptyDatasetState({
+        title: 'No Export Artifacts Found',
+        message: `No generated files were found under category: "${this.selectedCategory}".`,
+        actionNext: 'Click "Generate Scientific Report" above to compile the complete planetary cartographic dossier (GeoTIFFs, transformation JSON, CSV correspondence, and PDS report), or select "All" to browse all categories.',
+        actionBtnText: 'Generate Scientific Report',
+        actionBtnId: 'btn-empty-generate-artifacts',
+        secondaryBtnHtml: `
+          <button id="btn-empty-show-all" class="hud-btn">
+            View All Categories
+          </button>
+        `,
+      })
+
+      listEl.querySelector('#btn-empty-generate-artifacts')?.addEventListener('click', () => {
+        this.handleGenerateReport()
+      })
+      listEl.querySelector('#btn-empty-show-all')?.addEventListener('click', () => {
+        const catBtnAll = this.container.querySelector<HTMLButtonElement>('.export-tab-btn[data-cat="all"]')
+        catBtnAll?.click()
+      })
       return
     }
 
@@ -647,7 +663,7 @@ export class ExportWorkspace {
       }
     } catch (err: any) {
       console.error('Error generating report:', err)
-      this.showToast(`Generation failed: ${err.message || 'Unknown error'}`, 'error')
+      showHumanToast(err, 'error')
     } finally {
       this.isGenerating = false
       if (btn) {
@@ -680,18 +696,6 @@ export class ExportWorkspace {
   }
 
   private showToast(msg: string, type: 'info' | 'success' | 'error' = 'info') {
-    const existing = document.querySelector('.mission-toast')
-    existing?.remove()
-
-    const toast = document.createElement('div')
-    toast.className = `mission-toast toast-${type}`
-    toast.textContent = msg
-    document.body.appendChild(toast)
-
-    setTimeout(() => {
-      toast.style.opacity = '0'
-      toast.style.transform = 'translateY(10px)'
-      setTimeout(() => toast.remove(), 400)
-    }, 4000)
+    showHumanToast(msg, type)
   }
 }

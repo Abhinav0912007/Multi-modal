@@ -55,6 +55,9 @@ def run_pipeline(config, progress_callback=None):
     out_dir = os.path.join(OUTPUTS_DIR, config.pair_id)
     os.makedirs(out_dir, exist_ok=True)
 
+    if config.pair_id == "pair_002":
+        raise ValueError("IIRS spatial band extraction required before pipeline registration can be executed. Raw hyperspectral cube cannot be registered without extracted 2D spatial raster.")
+
     t_start = time.time()
 
     # ── Step 1: Discover Source ──────────────────────────────────────

@@ -38,22 +38,38 @@ export class StatisticsGrid {
     const procTime = m?.processing_time || '—'
 
     this.container.innerHTML = `
-      <section class="stats-section glass-panel corner-reticle">
+      <section class="stats-section glass-panel corner-reticle" aria-label="Scientific Registration Metrics">
         <div class="stats-header">
-          <h2>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-bright)" stroke-width="2">
-              <path d="M3 3v18h18" />
-              <path d="m19 9-5 5-4-4-3 3" />
-            </svg>
-            Scientific Registration Telemetry & Metrics
-          </h2>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h2>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-bright)" stroke-width="2" aria-hidden="true">
+                <path d="M3 3v18h18" />
+                <path d="m19 9-5 5-4-4-3 3" />
+              </svg>
+              Scientific Registration Telemetry &amp; Metrics
+            </h2>
+            ${m && (m.inliers || m.registration_error) ? `
+              <span class="badge-status" style="font-size:10px; padding:3px 8px;">
+                <span class="pulse-dot" style="background:var(--emerald-status);"></span>
+                HOMOGRAPHY LOCK: ${regError}
+              </span>
+            ` : ''}
+          </div>
 
           <!-- Primary Action Button: Launch Registration -->
-          <button id="btn-launch-registration" class="btn-launch" ${this.isProcessing ? 'disabled' : ''}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            ${this.isProcessing ? 'Registration In Progress...' : 'Launch Registration'}
+          <button id="btn-launch-registration" class="btn-launch" ${this.isProcessing ? 'disabled aria-busy="true"' : ''} aria-label="Execute Autonomous Multi-Modal Registration">
+            ${this.isProcessing ? `
+              <svg class="spin-loader" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="animation: spin 1s linear infinite;">
+                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+              </svg>
+              Processing Telemetry Run...
+            ` : `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Launch Scientific Registration
+            `}
           </button>
         </div>
 

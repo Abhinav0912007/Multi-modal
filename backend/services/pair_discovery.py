@@ -111,6 +111,10 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
     status = "pending_validation"
     status_label = "Pending validation"
 
+    is_hyperspectral = False
+    band_extracted = True
+    spatial_ready = True
+
     src_lower = primary_source_name.lower()
     if "ch2_ohr" in src_lower or "ohr" in src_lower or manifest_entry.get("instrument") == "OHRC":
         mission = "Chandrayaan-2"
@@ -124,10 +128,13 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
         mission = "Chandrayaan-2"
         instrument = "IIRS"
         instrument_name = "Chandrayaan-2 IIRS"
-        product_type = "hyperspectral_cube"
-        source_dims = {"lines": 4000, "samples": 1104}
-        status = "pending_validation"
-        status_label = "2D Band Extracted (Continuum 1580nm)"
+        product_type = "HYPERSPECTRAL"
+        source_dims = {"lines": 358973, "samples": 1104}
+        status = "band_extraction_required"
+        status_label = "Band extraction required"
+        is_hyperspectral = True
+        band_extracted = False
+        spatial_ready = False
     elif "ch1_tmc" in src_lower or "tmc" in src_lower or manifest_entry.get("instrument") == "TMC":
         mission = "Chandrayaan-1"
         instrument = "TMC"
@@ -141,14 +148,52 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
         instrument = manifest_entry.get("instrument", instrument)
         instrument_name = f"{mission} {instrument}"
         status = manifest_entry.get("status", status)
+        if instrument == "IIRS" or manifest_entry.get("product_type") in ("hyperspectral_cube", "HYPERSPECTRAL"):
+            product_type = "HYPERSPECTRAL"
+            status = "band_extraction_required"
+            status_label = "Band extraction required"
+            is_hyperspectral = True
+            band_extracted = False
+            spatial_ready = False
 
-    # Reference instrument detection
-    ref_instrument = "LROC"
+    # Reference instrument and dimensions detection
+    ref_instrument = "LROC WAC"
     ref_lower = primary_ref_name.lower()
+    ref_dims = {"lines": 7420, "samples": 704}
     if "m1" in ref_lower or "lroc" in ref_lower or "nac" in ref_lower:
-        ref_instrument = "LROC"
+        if "nac" in ref_lower or "lc" in ref_lower or "rc" in ref_lower:
+            ref_instrument = "LROC NAC"
+            ref_dims = {"lines": 52224, "samples": 2532}
+        else:
+            ref_instrument = "LROC WAC"
+            ref_dims = {"lines": 7420, "samples": 704}
     elif "wac" in ref_lower:
-        ref_instrument = "LROC-WAC"
+        ref_instrument = "LROC WAC"
+        ref_dims = {"lines": 7420, "samples": 704}
+
+    # Nominal ROI bounds tailored for scientific lunar feature extraction
+    if instrument == "OHRC":
+        nominal_roi = {
+            "src_sample_start": 1000,
+            "src_sample_end": 7000,
+            "src_line_start": 42000,
+            "src_line_end": 46000,
+            "ref_x0": 100,
+            "ref_y0": 3000,
+            "ref_x1": 600,
+            "ref_y1": 5000
+        }
+    else:
+        nominal_roi = {
+            "src_sample_start": 0,
+            "src_sample_end": min(4000, source_dims["samples"]),
+            "src_line_start": 0,
+            "src_line_end": min(4000, source_dims["lines"]),
+            "ref_x0": 0,
+            "ref_y0": 0,
+            "ref_x1": min(700, ref_dims["samples"]),
+            "ref_y1": min(2000, ref_dims["lines"])
+        }
 
     # Reference Geographic Overlap Validation State
     reference_status = "UNKNOWN"
@@ -176,10 +221,16 @@ def inspect_pair(pair_path: str, pair_id: str) -> dict:
         "reference_filename": primary_ref_name,
         "reference_instrument": ref_instrument,
         "source_dimensions": source_dims,
+        "reference_dimensions": ref_dims,
+        "nominal_roi": nominal_roi,
         "status": status,
         "status_label": status_label,
         "reference_status": reference_status,
         "reference_status_label": reference_status_label,
+        "is_hyperspectral": is_hyperspectral,
+        "band_extracted": band_extracted,
+        "spatial_ready": spatial_ready,
+        "band_extraction_required": not band_extracted if is_hyperspectral else False,
         "has_source": len(source_files_info) > 0,
         "has_reference": len(reference_files_info) > 0,
         "source_files": source_names,

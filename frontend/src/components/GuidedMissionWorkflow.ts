@@ -202,7 +202,7 @@ export class GuidedMissionWorkflow {
       const icon = isPast ? '✓' : `${s.id}`
 
       return `
-        <button class="stage-step-btn ${statusClass}" data-stage-index="${idx}" title="${s.label}: ${s.shortTitle}">
+        <button class="stage-step-btn ${statusClass}" data-stage-index="${idx}" aria-current="${isCur ? 'step' : 'false'}" aria-label="Stage ${s.id}: ${s.shortTitle}" title="${s.label}: ${s.shortTitle}">
           <span class="step-num">${icon}</span>
           <span class="step-label">${s.shortTitle}</span>
         </button>
@@ -215,27 +215,27 @@ export class GuidedMissionWorkflow {
         <div class="gmb-top-row">
           <div class="gmb-left-group">
             <span class="gmb-badge">
-              <span class="pulse-indicator-dot"></span>
+              <span class="pulse-indicator-dot" aria-hidden="true"></span>
               GUIDED MISSION RUN • STAGE ${cur.id} OF 8
             </span>
             <div class="gmb-stage-title font-heading">${cur.label}</div>
           </div>
 
-          <div class="gmb-center-steps">
+          <div class="gmb-center-steps" role="navigation" aria-label="Mission stage steps">
             ${stagesHtml}
           </div>
 
           <div class="gmb-actions-group">
-            <button class="gmb-btn secondary" id="btn-gmb-prev" ${this.currentStageIndex === 0 ? 'disabled' : ''} title="Previous stage">
+            <button class="gmb-btn secondary" id="btn-gmb-prev" ${this.currentStageIndex === 0 ? 'disabled' : ''} aria-label="Previous mission stage" title="Previous stage">
               ◀ Back
             </button>
-            <button class="gmb-btn primary" id="btn-gmb-next" title="Next stage">
+            <button class="gmb-btn primary" id="btn-gmb-next" aria-label="Next mission stage" title="Next stage">
               ${this.currentStageIndex === MISSION_STAGES.length - 1 ? 'Finish & Inspect 🏁' : 'Next Stage ▶'}
             </button>
-            <button class="gmb-btn auto-play ${this.isAutoPlaying ? 'playing' : ''}" id="btn-gmb-autoplay" title="Toggle automatic presentation walkthrough">
+            <button class="gmb-btn auto-play ${this.isAutoPlaying ? 'playing' : ''}" id="btn-gmb-autoplay" aria-label="Toggle auto-play presentation mode" title="Toggle automatic presentation walkthrough">
               ${this.isAutoPlaying ? `⏸ Pause Demo (<span id="demo-countdown-sec">${this.autoPlayCountdown}s</span>)` : '▶ Auto-Tour'}
             </button>
-            <button class="gmb-btn summary-btn" id="btn-gmb-summary" title="Open executive scientific result summary">
+            <button class="gmb-btn summary-btn" id="btn-gmb-summary" aria-label="Open mission evaluation summary" title="Open executive scientific result summary">
               📊 Summary
             </button>
           </div>

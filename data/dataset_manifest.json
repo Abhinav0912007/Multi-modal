@@ -28,7 +28,7 @@
       "instrument": "IIRS",
       "source": {
         "path": "data/pairs/pair_002/source/ch2_iir_nci_20210115T0628272014_d_img_d32.qub",
-        "product_type": "hyperspectral_cube",
+        "product_type": "HYPERSPECTRAL",
         "filename": "ch2_iir_nci_20210115T0628272014_d_img_d32.qub",
         "lines": 358973,
         "samples": 1104,
@@ -40,7 +40,8 @@
         "product_type": "NAC",
         "filename": "M1536201804CC.IMG"
       },
-      "status": "pending_validation",
+      "status": "band_extraction_required",
+      "status_label": "Band extraction required",
       "reference_status": "UNKNOWN",
       "reference_status_label": "Reference geographic overlap: NOT YET VERIFIED"
     },

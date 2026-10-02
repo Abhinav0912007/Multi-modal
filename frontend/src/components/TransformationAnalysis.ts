@@ -19,6 +19,7 @@ import {
   fetchScientificReport,
   type TransformationAnalysisResult
 } from '../api'
+import { renderErrorBannerHtml, showHumanToast } from '../services/errorHandler'
 
 export class TransformationAnalysis {
   private container: HTMLElement
@@ -26,7 +27,6 @@ export class TransformationAnalysis {
   private transformType: 'homography' | 'affine' = 'homography'
   private ransacThresh: number = 3.0
   private data: TransformationAnalysisResult | null = null
-  private errorMessage: string = ''
 
   // Visualizer settings
   private residualPlotMode: 'scatter' | 'radial' = 'scatter'
@@ -35,7 +35,6 @@ export class TransformationAnalysis {
   private rootEl!: HTMLDivElement
   private residualCanvas!: HTMLCanvasElement
   private histCanvas!: HTMLCanvasElement
-  private toastEl!: HTMLDivElement
 
   constructor(container: HTMLElement, initialPairId: string = 'pair_001') {
     this.container = container
@@ -142,7 +141,6 @@ export class TransformationAnalysis {
     `
 
     this.container.appendChild(this.rootEl)
-    this.toastEl = this.rootEl.querySelector('#ta-toast')!
   }
 
   private setupListeners() {
@@ -205,12 +203,13 @@ export class TransformationAnalysis {
       this.updateHeaderBadges()
       this.renderFullDashboard()
     } catch (err: any) {
-      this.errorMessage = err.message || 'Failed to retrieve transformation analysis'
+      console.error('Failed to retrieve transformation analysis:', err)
       contentArea.innerHTML = `
-        <div class="glass-panel" style="grid-column: 1 / -1; padding: 32px; border-color: var(--rose-alert); text-align: center;">
-          <h3 style="color: var(--rose-alert); font-family: var(--font-heading); margin-bottom: 8px;">Analysis Failed</h3>
-          <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.errorMessage}</p>
-          <button id="ta-retry-btn" class="hud-btn">Retry Analysis</button>
+        <div style="grid-column: 1 / -1;">
+          ${renderErrorBannerHtml(err, {
+            retryBtnId: 'ta-retry-btn',
+            retryBtnText: 'Retry Matrix Analysis',
+          })}
         </div>
       `
       this.rootEl.querySelector('#ta-retry-btn')?.addEventListener('click', () => this.loadAnalysis())
@@ -1207,16 +1206,11 @@ export class TransformationAnalysis {
       URL.revokeObjectURL(url)
       this.showToast(`Downloaded TRANSFORMATION_REPORT_${this.pairId.toUpperCase()}.md`)
     } catch (err: any) {
-      this.showToast(`Report export error: ${err.message}`)
+      showHumanToast(err, 'error')
     }
   }
 
   private showToast(msg: string) {
-    if (!this.toastEl) return
-    this.toastEl.textContent = msg
-    this.toastEl.classList.add('show')
-    setTimeout(() => {
-      this.toastEl.classList.remove('show')
-    }, 3200)
+    showHumanToast(msg, 'info')
   }
 }

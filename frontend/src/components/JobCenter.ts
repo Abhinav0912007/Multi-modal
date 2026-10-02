@@ -8,6 +8,7 @@
  */
 
 import { jobService } from '../services/jobService'
+import { renderEmptyDatasetState, showHumanToast } from '../services/errorHandler'
 
 export interface HistoricalJobItem {
   job_id: string
@@ -68,6 +69,7 @@ export class JobCenter {
       }
     } catch (e) {
       console.warn('Failed to load historical jobs:', e)
+      showHumanToast(e, 'error')
     } finally {
       this.isLoading = false
       this.render()
@@ -214,13 +216,13 @@ export class JobCenter {
 
       <!-- JOBS LIST / GRID -->
       <div class="jc-jobs-list">
-        ${filteredJobs.length === 0 ? `
-          <div class="jc-empty-card glass-panel">
-            <div class="jc-empty-icon">🛰️</div>
-            <h3>No jobs found matching the selected filter</h3>
-            <p>Launch a new registration pipeline from Mission Control or the button above.</p>
-          </div>
-        ` : filteredJobs.map(job => {
+        ${filteredJobs.length === 0 ? renderEmptyDatasetState({
+          title: 'No Telemetry Jobs Recorded',
+          message: 'No background registration jobs matched your current filter criteria in the telemetry registry.',
+          actionNext: 'Click "Launch Scientific Job" below or return to Mission Control to initiate automated feature matching and surface alignment.',
+          actionBtnText: 'Launch Scientific Job',
+          actionBtnId: 'btn-jc-empty-launch',
+        }) : filteredJobs.map(job => {
           const isComp = job.status === 'completed'
           const inliers = job.metrics?.inliers ?? '—'
           const ratio = job.metrics?.inlier_ratio != null ? `${(job.metrics.inlier_ratio * 100).toFixed(1)}%` : '—'
@@ -368,6 +370,10 @@ export class JobCenter {
           this.onRunJob(pairId)
         }
       })
+    })
+
+    root.querySelector('#btn-jc-empty-launch')?.addEventListener('click', () => {
+      this.onRunJob(this.filterPair !== 'all' ? this.filterPair : 'pair_001')
     })
   }
 }

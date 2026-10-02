@@ -157,6 +157,39 @@ def analyze_spatial_distribution(req: SpatialAnalyzeRequest):
     )
     match_res = match_features(match_req)
 
+    if req.pair_id == "pair_002" or match_res.get("status") == "band_extraction_required":
+        return {
+            "status": "band_extraction_required",
+            "pair_id": req.pair_id,
+            "grid_dimensions": {"rows": req.grid_rows, "cols": req.grid_cols, "total_cells": req.grid_rows * req.grid_cols},
+            "cell_size_px": {"width": 0, "height": 0},
+            "reference_image": "",
+            "source_image": "",
+            "dimensions": {"ref_h": 0, "ref_w": 0, "src_h": 0, "src_w": 0},
+            "inliers": [],
+            "outliers": [],
+            "keypoints": [],
+            "cells": [],
+            "statistics": {
+                "total_inliers": 0,
+                "total_outliers": 0,
+                "active_cells": 0,
+                "empty_cells": req.grid_rows * req.grid_cols,
+                "deficient_cells": 0,
+                "coverage_ratio": 0.0,
+                "coverage_percentage": 0.0,
+                "mean_inliers_per_active_cell": 0.0,
+                "max_inliers_in_cell": 0,
+                "coefficient_of_variation": 0.0,
+                "spatial_uniformity_index": 0.0,
+                "quadrants": {"nw": 0, "ne": 0, "sw": 0, "se": 0},
+                "assessment": "IIRS Hyperspectral band extraction required before spatial analysis.",
+                "assessment_level": "critical",
+            },
+            "reference_data": None,
+            "source_data": None,
+        }
+
     ref_h, ref_w = match_res.get("reference_dimensions", [2000, 704])
     src_h, src_w = match_res.get("source_dimensions", [2000, 2000])
 

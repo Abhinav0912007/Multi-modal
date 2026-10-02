@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import CORS_ORIGINS
 from backend.db.init_db import init_db
-from backend.routers import pairs, artifacts, terrain, pipeline, preview, datasets, features, spatial, alignment, transformation
+from backend.routers import pairs, artifacts, terrain, pipeline, preview, datasets, features, spatial, alignment, transformation, preprocessing
 from backend.routers.v1 import api_v1_router
 
 
@@ -54,6 +54,7 @@ app.include_router(features.router)
 app.include_router(spatial.router)
 app.include_router(alignment.router)
 app.include_router(transformation.router)
+app.include_router(preprocessing.router)
 
 
 @app.get("/api/health")

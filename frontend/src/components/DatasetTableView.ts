@@ -1,21 +1,25 @@
 import type { DatasetItem } from '../types'
+import { renderEmptyDatasetState } from '../services/errorHandler'
 
 export class DatasetTableView {
   private container: HTMLElement
   private datasets: DatasetItem[]
   private onSelectDataset: (dataset: DatasetItem) => void
   private onSelectForPipeline: (dataset: DatasetItem) => void
+  private onResetFilters?: () => void
 
   constructor(
     container: HTMLElement,
     datasets: DatasetItem[],
     onSelectDataset: (dataset: DatasetItem) => void,
-    onSelectForPipeline: (dataset: DatasetItem) => void
+    onSelectForPipeline: (dataset: DatasetItem) => void,
+    onResetFilters?: () => void
   ) {
     this.container = container
     this.datasets = datasets
     this.onSelectDataset = onSelectDataset
     this.onSelectForPipeline = onSelectForPipeline
+    this.onResetFilters = onResetFilters
     this.render()
   }
 
@@ -26,11 +30,17 @@ export class DatasetTableView {
 
   public render() {
     if (this.datasets.length === 0) {
-      this.container.innerHTML = `
-        <div style="padding: 60px 20px; text-align: center; color: var(--text-muted); font-family: var(--font-mono);">
-          <p style="font-size: 14px; color: var(--text-secondary);">No lunar datasets matched the selected filter criteria.</p>
-        </div>
-      `
+      this.container.innerHTML = renderEmptyDatasetState({
+        title: 'No Lunar Datasets Found',
+        message: 'No planetary products matched the current table filter conditions.',
+        actionNext: 'Reset table filter parameters or clear your search term to browse all available Chandrayaan-1 and Chandrayaan-2 products.',
+        actionBtnText: 'Reset Filter Criteria',
+        actionBtnId: 'btn-table-empty-reset',
+      })
+
+      this.container.querySelector('#btn-table-empty-reset')?.addEventListener('click', () => {
+        if (this.onResetFilters) this.onResetFilters()
+      })
       return
     }
 

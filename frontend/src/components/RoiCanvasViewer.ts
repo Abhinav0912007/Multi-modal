@@ -674,6 +674,125 @@ export class RoiCanvasViewer {
         this.requestRedraw()
       }
     })
+
+    // Touch Support (Mobile & Tablet)
+    let touchStartDist = 0
+    let isPinching = false
+
+    this.viewportEl.addEventListener('touchstart', (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        const rect = this.viewportEl.getBoundingClientRect()
+        const mouseX = touch.clientX - rect.left
+        const mouseY = touch.clientY - rect.top
+
+        // Comparison slider
+        if (this.isCompareMode && Math.abs(mouseX - rect.width * this.compareSplitRatio) < 28) {
+          this.isDraggingSplitter = true
+          return
+        }
+
+        const { worldX, worldY } = this.screenToWorld(mouseX, mouseY)
+        if (this.isPointInsideRoi(worldX, worldY)) {
+          this.isDraggingRoi = true
+          this.dragStartX = mouseX
+          this.dragStartY = mouseY
+          this.initialRoiCoords = { ...this.coords }
+          return
+        }
+
+        this.isPanning = true
+        this.panStartX = mouseX
+        this.panStartY = mouseY
+        this.startPanX = this.panX
+        this.startPanY = this.panY
+      } else if (e.touches.length === 2) {
+        this.isPanning = false
+        this.isDraggingRoi = false
+        this.isDraggingSplitter = false
+        isPinching = true
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        touchStartDist = Math.hypot(dx, dy)
+      }
+    }, { passive: false })
+
+    window.addEventListener('touchmove', (e: TouchEvent) => {
+      const rect = this.viewportEl.getBoundingClientRect()
+      if (this.isDraggingSplitter && e.touches.length === 1) {
+        const mouseX = e.touches[0].clientX - rect.left
+        this.compareSplitRatio = Math.max(0.05, Math.min(0.95, mouseX / rect.width))
+        this.requestRedraw()
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+
+      if (this.isDraggingRoi && this.initialRoiCoords && e.touches.length === 1) {
+        const mouseX = e.touches[0].clientX - rect.left
+        const mouseY = e.touches[0].clientY - rect.top
+        const dxScreen = mouseX - this.dragStartX
+        const dyScreen = mouseY - this.dragStartY
+        const dxWorld = dxScreen / this.zoom
+        const dyWorld = dyScreen / this.zoom
+
+        if (this.layerMode === 'source') {
+          const w = this.initialRoiCoords.src_sample_end - this.initialRoiCoords.src_sample_start
+          const h = this.initialRoiCoords.src_line_end - this.initialRoiCoords.src_line_start
+          let newS0 = Math.max(0, Math.min(this.SRC_WIDTH - w, Math.round(this.initialRoiCoords.src_sample_start + dxWorld)))
+          let newL0 = Math.max(0, Math.min(this.SRC_HEIGHT - h, Math.round(this.initialRoiCoords.src_line_start + dyWorld)))
+          this.coords.src_sample_start = newS0
+          this.coords.src_sample_end = newS0 + w
+          this.coords.src_line_start = newL0
+          this.coords.src_line_end = newL0 + h
+        } else {
+          const w = this.initialRoiCoords.ref_x1 - this.initialRoiCoords.ref_x0
+          const h = this.initialRoiCoords.ref_y1 - this.initialRoiCoords.ref_y0
+          let newX0 = Math.max(0, Math.min(this.REF_WIDTH - w, Math.round(this.initialRoiCoords.ref_x0 + dxWorld)))
+          let newY0 = Math.max(0, Math.min(this.REF_HEIGHT - h, Math.round(this.initialRoiCoords.ref_y0 + dyWorld)))
+          this.coords.ref_x0 = newX0
+          this.coords.ref_x1 = newX0 + w
+          this.coords.ref_y0 = newY0
+          this.coords.ref_y1 = newY0 + h
+        }
+        this.initPolygonFromCoords()
+        this.onRoiChange(this.coords)
+        this.requestRedraw()
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+
+      if (this.isPanning && e.touches.length === 1) {
+        const mouseX = e.touches[0].clientX - rect.left
+        const mouseY = e.touches[0].clientY - rect.top
+        this.panX = this.startPanX + (mouseX - this.panStartX)
+        this.panY = this.startPanY + (mouseY - this.panStartY)
+        this.requestRedraw()
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+
+      if (isPinching && e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const currentDist = Math.hypot(dx, dy)
+        if (touchStartDist > 0 && Math.abs(currentDist - touchStartDist) > 2) {
+          const factor = currentDist / touchStartDist
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+          this.applyZoom(factor, midX, midY)
+          touchStartDist = currentDist
+        }
+        if (e.cancelable) e.preventDefault()
+      }
+    }, { passive: false })
+
+    window.addEventListener('touchend', () => {
+      this.isPanning = false
+      this.isDraggingRoi = false
+      this.isDraggingSplitter = false
+      isPinching = false
+      touchStartDist = 0
+    })
   }
 
   private applyZoom(factor: number, cx: number, cy: number) {

@@ -137,11 +137,14 @@ export async function fetchAvailablePairs(): Promise<PairItem[]> {
       mission: 'Chandrayaan-2',
       instrument: 'IIRS',
       instrument_name: 'Chandrayaan-2 IIRS',
+      product_type: 'HYPERSPECTRAL',
+      is_hyperspectral: true,
+      band_extracted: false,
       source_filename: 'ch2_iir_nci_20210115T0628272014_d_img_d32.qub',
       reference_filename: 'M1536201804CC.IMG',
       reference_instrument: 'LROC',
-      status: 'pending_validation',
-      status_label: '2D Band Extracted (Continuum 1580nm)',
+      status: 'band_extraction_required',
+      status_label: 'Band extraction required',
       reference_status: 'UNKNOWN',
       reference_status_label: 'Reference geographic overlap: NOT YET VERIFIED',
       source_files: ['ch2_iir_nci_20210115T0628272014_d_img_d32.qub'],
@@ -302,10 +305,12 @@ export interface FeatureMatchResult {
   validation_state?: string
   validation_reason?: string
   is_statistically_valid?: boolean
+  native_source_dimensions?: [number, number]
+  native_reference_dimensions?: [number, number]
   source_dimensions: [number, number]
   reference_dimensions: [number, number]
-  source_image: string
-  reference_image: string
+  source_image?: string
+  reference_image?: string
   source_keypoints: { x: number; y: number; size?: number }[]
   reference_keypoints: { x: number; y: number; size?: number }[]
   matches: {
@@ -821,4 +826,54 @@ export async function fetchStructuredScientificReport(pairId: string): Promise<S
   }
   return null
 }
+
+export interface PreprocessParams {
+  pair_id: string
+  roi_src: [number, number, number, number]
+  roi_ref: [number, number, number, number]
+  enable_normalization?: boolean
+  p_low?: number
+  p_high?: number
+  enable_clahe?: boolean
+  clip_limit?: number
+  tile_grid_size?: number
+}
+
+export interface PreprocessResult {
+  status: string
+  pair_id: string
+  source_raw: string
+  source_processed: string
+  reference_raw: string
+  reference_processed: string
+  source_shape: [number, number]
+  reference_shape: [number, number]
+  warning: string | null
+  parameters: {
+    enable_normalization: boolean
+    p_low: number
+    p_high: number
+    enable_clahe: boolean
+    clip_limit: number
+    tile_grid_size: number
+  }
+}
+
+export async function executePreprocessing(params: PreprocessParams): Promise<PreprocessResult | null> {
+  try {
+    const res = await fetch(`${API_BASE}/preprocessing/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch (err) {
+    console.warn('Preprocessing execution error:', err)
+  }
+  return null
+}
+
 

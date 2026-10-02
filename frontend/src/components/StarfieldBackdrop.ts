@@ -101,25 +101,23 @@ export class StarfieldBackdrop {
     const w = this.width
     const h = this.height
 
-    // 1. Base Deep Space Fill (Near-black space: #02040a to #040816)
-    ctx.fillStyle = '#02040a'
+    // 1. Base Deep Space Fill (Near-black deep space: #020308)
+    ctx.fillStyle = '#020308'
     ctx.fillRect(0, 0, w, h)
 
-    // 2. Distant Deep Space Nebula Haze (Extremely subtle, non-distracting)
-    // Primary Navy/Indigo Nebula in top center
-    const neb1 = ctx.createRadialGradient(w * 0.45, h * 0.2, 50, w * 0.45, h * 0.2, Math.max(w, h) * 0.65)
-    neb1.addColorStop(0, 'rgba(15, 23, 58, 0.45)') // Deep Navy
-    neb1.addColorStop(0.4, 'rgba(49, 46, 129, 0.14)') // Indigo Haze
-    neb1.addColorStop(0.8, 'rgba(8, 16, 40, 0.08)')
-    neb1.addColorStop(1, 'rgba(2, 4, 10, 0)')
+    // 2. Distant Deep Space Nebula Haze (Extremely subtle, faint, neutral dark)
+    // Very faint deep neutral vignette in top center
+    const neb1 = ctx.createRadialGradient(w * 0.5, h * 0.25, 40, w * 0.5, h * 0.25, Math.max(w, h) * 0.65)
+    neb1.addColorStop(0, 'rgba(8, 12, 24, 0.30)') // Very subtle dark navy
+    neb1.addColorStop(0.5, 'rgba(12, 16, 32, 0.08)')
+    neb1.addColorStop(1, 'rgba(2, 3, 8, 0)')
     ctx.fillStyle = neb1
     ctx.fillRect(0, 0, w, h)
 
-    // Secondary Cool Cyan Haze in lower right
-    const neb2 = ctx.createRadialGradient(w * 0.85, h * 0.75, 40, w * 0.85, h * 0.75, Math.max(w, h) * 0.45)
-    neb2.addColorStop(0, 'rgba(14, 116, 144, 0.12)') // Muted Deep Cyan
-    neb2.addColorStop(0.6, 'rgba(8, 47, 73, 0.05)')
-    neb2.addColorStop(1, 'rgba(2, 4, 10, 0)')
+    // Faint subtle cyan dust in lower quadrant (very restrained)
+    const neb2 = ctx.createRadialGradient(w * 0.8, h * 0.7, 30, w * 0.8, h * 0.7, Math.max(w, h) * 0.4)
+    neb2.addColorStop(0, 'rgba(14, 116, 144, 0.04)') // Barely visible cool cyan
+    neb2.addColorStop(1, 'rgba(2, 3, 8, 0)')
     ctx.fillStyle = neb2
     ctx.fillRect(0, 0, w, h)
 

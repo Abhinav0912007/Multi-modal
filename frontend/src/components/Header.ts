@@ -38,11 +38,11 @@ export class Header {
     else if (procStatus === 'COMPLETED') procClass = 'completed'
 
     this.container.innerHTML = `
-      <header class="mission-header glass-panel corner-reticle">
+      <header class="mission-header glass-panel corner-reticle" role="banner">
         <div class="header-top-row">
           <!-- Title & Subtitle -->
           <div class="header-brand">
-            <div class="isro-emblem" title="ISRO Chandrayaan Program">
+            <div class="isro-emblem" title="ISRO Chandrayaan Lunar Program" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 2v20M2 12h20" stroke-dasharray="2 2" opacity="0.6"/>
@@ -51,8 +51,15 @@ export class Header {
               </svg>
             </div>
             <div class="brand-text">
-              <h1>Chandrayaan Lunar Image Registration System</h1>
-              <p>Precision geometric alignment of Chandrayaan TMC imagery with derived lunar reference products.</p>
+              <div class="brand-eyebrow">
+                <span class="agency-tag">ISRO • SAC &amp; ISSDC GROUND SYSTEM</span>
+                <span class="eyebrow-divider">/</span>
+                <span class="program-tag">CHANDRAYAAN LUNAR PROGRAM</span>
+              </div>
+              <h1 class="scientific-main-heading">
+                CHANDRAYAAN <span class="highlight-cyan">LUNAR IMAGING</span> &bull; <span class="highlight-gold">SCIENTIFIC REGISTRATION</span>
+              </h1>
+              <p>Autonomous Sub-Pixel Multi-Modal Homography &amp; Cartographic Ortho-Rectification Engine &bull; TMC-1 / TMC-2 / OHRC &times; LROC Basemap</p>
             </div>
           </div>
 
@@ -73,7 +80,7 @@ export class Header {
             <!-- Selected Dataset Selector Pill -->
             <div class="telemetry-pill" title="Currently active data pair">
               <span class="label">DATASET:</span>
-              <select id="header-pair-selector" class="val" style="background:transparent; border:none; color:var(--cyan-bright); font-family:var(--font-mono); font-weight:600; cursor:pointer; outline:none;">
+              <select id="header-pair-selector" class="val" aria-label="Select Active Lunar Observation Pair" style="background:transparent; border:1px solid transparent; border-radius:4px; color:var(--cyan-bright); font-family:var(--font-mono); font-weight:600; cursor:pointer;">
                 ${this.pairs.map(p => `
                   <option value="${p.id}" ${p.id === this.status.activePair ? 'selected' : ''} style="background:#091226; color:#fff;">
                     ${p.id.toUpperCase()} ${p.instrument ? `• ${p.instrument}` : ''}

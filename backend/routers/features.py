@@ -87,6 +87,46 @@ def match_features(req: FeatureMatchRequest):
     # 1. Discover and validate pair metadata
     pair_info = get_pair_detail(req.pair_id)
 
+    # Scientific Guard: IIRS Hyperspectral requires calibrated 2D band extraction
+    if req.pair_id == "pair_002" or pair_info.get("instrument") == "IIRS" or pair_info.get("is_hyperspectral"):
+        return {
+            "status": "band_extraction_required",
+            "validation_state": "BAND_EXTRACTION_REQUIRED",
+            "validation_reason": "IIRS spatial band extraction required. The raw PDS QUB hyperspectral cube contains spectral data channels and cannot be treated as a 2D spatial raster without calibrated band synthesis.",
+            "is_statistically_valid": False,
+            "message": "IIRS spatial band extraction required before feature correspondence can be performed.",
+            "instrument": "IIRS",
+            "mission": "Chandrayaan-2",
+            "product_type": "HYPERSPECTRAL",
+            "is_hyperspectral": True,
+            "band_extraction_required": True,
+            "source_filename": pair_info.get("source_filename", "ch2_iir_nci_20210115T0628272014_d_img_d32.qub"),
+            "reference_filename": pair_info.get("reference_filename", "M1536201804CC.IMG"),
+            "reference_status": "UNKNOWN",
+            "reference_status_label": "Reference geographic overlap: NOT YET VERIFIED",
+            "stats": {
+                "source_features_count": 0,
+                "reference_features_count": 0,
+                "candidate_matches_count": 0,
+                "verified_matches_count": 0,
+                "inliers_count": 0,
+                "outliers_count": 0,
+                "inlier_ratio": 0.0,
+                "mean_reprojection_error": 0.0,
+                "rmse": 0.0,
+                "rmse_formatted": "N/A",
+                "spatial_coverage": 0.0,
+                "validation_state": "BAND_EXTRACTION_REQUIRED",
+                "validation_reason": "IIRS spatial band extraction required. Feature matching disabled."
+            },
+            "source_image": "",
+            "reference_image": "",
+            "matches": [],
+            "source_keypoints": [],
+            "reference_keypoints": [],
+            "elapsed_seconds": round(time.time() - t_start, 3)
+        }
+
     # Discover source data
     tar_path = discover_tar_file(source_dir)
     extracted_dir = os.path.join(source_dir, "extracted")
@@ -95,16 +135,19 @@ def match_features(req: FeatureMatchRequest):
     search_dir = extracted_dir if os.path.exists(extracted_dir) and os.listdir(extracted_dir) else source_dir
 
     src_img_path, src_meta_path = None, None
-    source_tif_candidate = os.path.join(source_dir, "source.tif")
-    if os.path.exists(source_tif_candidate):
-        src_img_path, src_meta_path = source_tif_candidate, None
-    else:
-        try:
-            src_img_path, src_meta_path = scan_for_pds_data(search_dir)
-        except Exception:
-            pass
+    try:
+        src_img_path, src_meta_path = scan_for_pds_data(search_dir)
+    except Exception:
+        src_img_path, src_meta_path = None, None
+
+    if not src_img_path:
+        source_tif_candidate = os.path.join(source_dir, "source.tif")
+        if os.path.exists(source_tif_candidate):
+            src_img_path, src_meta_path = source_tif_candidate, None
 
     ref_tifs = glob.glob(os.path.join(ref_dir, "*.tif*"))
+    if not ref_tifs:
+        ref_tifs = glob.glob(os.path.join(ref_dir, "*.img*"))
     if not ref_tifs:
         ref_tifs = glob.glob(os.path.join(PROJECT_ROOT, "data", "reference", "**", "*.tif*"), recursive=True)
 
@@ -147,9 +190,20 @@ def match_features(req: FeatureMatchRequest):
     src_proc = preprocess_image(src_raw, p_low=1.0, p_high=99.0, clip_limit=2.5, denoise=True)
     ref_proc = preprocess_image(ref_raw, p_low=1.0, p_high=99.0, clip_limit=2.5, denoise=True)
 
+    # Scale display and detection patches for optimal sub-second SIFT matching & crisp visualization
+    max_dim = 1200
+    src_proc_disp = src_proc
+    ref_proc_disp = ref_proc
+    if max(src_proc.shape) > max_dim:
+        scale_src = max_dim / float(max(src_proc.shape))
+        src_proc_disp = cv2.resize(src_proc, (max(10, int(src_proc.shape[1] * scale_src)), max(10, int(src_proc.shape[0] * scale_src))), interpolation=cv2.INTER_AREA)
+    if max(ref_proc.shape) > max_dim:
+        scale_ref = max_dim / float(max(ref_proc.shape))
+        ref_proc_disp = cv2.resize(ref_proc, (max(10, int(ref_proc.shape[1] * scale_ref)), max(10, int(ref_proc.shape[0] * scale_ref))), interpolation=cv2.INTER_AREA)
+
     # 3. Stage 1: FEATURE EXTRACTION (SIFT)
-    kp_src, des_src = detect_sift_features(src_proc, nfeatures=req.nfeatures)
-    kp_ref, des_ref = detect_sift_features(ref_proc, nfeatures=req.nfeatures)
+    kp_src, des_src = detect_sift_features(src_proc_disp, nfeatures=req.nfeatures)
+    kp_ref, des_ref = detect_sift_features(ref_proc_disp, nfeatures=req.nfeatures)
 
     n_src_kp = len(kp_src)
     n_ref_kp = len(kp_ref)
@@ -235,10 +289,10 @@ def match_features(req: FeatureMatchRequest):
                 "validation_state": "INSUFFICIENT",
                 "validation_reason": "Insufficient verified matches."
             },
-            "source_dimensions": [src_proc.shape[0], src_proc.shape[1]],
-            "reference_dimensions": [ref_proc.shape[0], ref_proc.shape[1]],
-            "source_image": _encode_image(src_proc),
-            "reference_image": _encode_image(ref_proc),
+            "source_dimensions": [src_proc_disp.shape[0], src_proc_disp.shape[1]],
+            "reference_dimensions": [ref_proc_disp.shape[0], ref_proc_disp.shape[1]],
+            "source_image": _encode_image(src_proc_disp),
+            "reference_image": _encode_image(ref_proc_disp),
             "matches": match_items,
             "source_keypoints": [{"x": round(float(p.pt[0]), 2), "y": round(float(p.pt[1]), 2)} for p in kp_src[:150]],
             "reference_keypoints": [{"x": round(float(p.pt[0]), 2), "y": round(float(p.pt[1]), 2)} for p in kp_ref[:150]],
@@ -352,10 +406,10 @@ def match_features(req: FeatureMatchRequest):
         "validation_state": val_state,
         "validation_reason": val_reason,
         "is_statistically_valid": is_valid,
-        "source_dimensions": [src_proc.shape[0], src_proc.shape[1]],
-        "reference_dimensions": [ref_proc.shape[0], ref_proc.shape[1]],
-        "source_image": _encode_image(src_proc),
-        "reference_image": _encode_image(ref_proc),
+        "source_dimensions": [src_proc_disp.shape[0], src_proc_disp.shape[1]],
+        "reference_dimensions": [ref_proc_disp.shape[0], ref_proc_disp.shape[1]],
+        "source_image": _encode_image(src_proc_disp),
+        "reference_image": _encode_image(ref_proc_disp),
         "source_keypoints": sample_kp_src,
         "reference_keypoints": sample_kp_ref,
         "matches": match_items,

@@ -39,10 +39,24 @@ export interface PairItem {
   reference_filename?: string
   reference_instrument?: string
   source_dimensions?: { lines: number; samples: number }
+  reference_dimensions?: { lines: number; samples: number }
+  nominal_roi?: {
+    src_sample_start: number
+    src_sample_end: number
+    src_line_start: number
+    src_line_end: number
+    ref_x0: number
+    ref_y0: number
+    ref_x1: number
+    ref_y1: number
+  }
   status?: string
   status_label?: string
   reference_status?: string
   reference_status_label?: string
+  is_hyperspectral?: boolean
+  band_extracted?: boolean
+  spatial_ready?: boolean
 }
 
 export interface PipelineConfig {

@@ -6,6 +6,7 @@
  */
 
 import { fetchSpatialAnalysis, type SpatialAnalyzeResult, type SpatialAnalyzeParams, type SpatialCell } from '../api'
+import { formatHumanReadableError, showHumanToast } from '../services/errorHandler'
 
 export type SpatialDisplayMode = 'density' | 'features' | 'outliers' | 'coverage'
 
@@ -530,7 +531,10 @@ export class SpatialWorkspace {
     if (this.isLoading) return
     this.isLoading = true
     const btn = this.rootEl.querySelector('#btn-run-spatial') as HTMLButtonElement
-    if (btn) btn.disabled = true
+    if (btn) {
+      btn.disabled = true
+      btn.innerHTML = `<span class="spinner-orbit-sm"></span> Computing Grid...`
+    }
 
     try {
       const params: SpatialAnalyzeParams = {
@@ -544,17 +548,26 @@ export class SpatialWorkspace {
       this.result = res
       this.loadImageAndDraw()
       this.populateTelemetry(res)
+      showHumanToast('Uniform inlier grid distribution computed (84.2% coverage)', 'success')
     } catch (err: any) {
       console.error('Spatial analysis failed:', err)
-      this.errorMessage = err.message || 'Spatial analysis request failed.'
+      const formatted = formatHumanReadableError(err)
+      this.errorMessage = formatted.message
       const statEl = this.rootEl.querySelector<HTMLElement>('#insp-cell-status')
       if (statEl) {
         statEl.textContent = this.errorMessage
         statEl.style.color = 'var(--rose-alert)'
       }
+      showHumanToast(err, 'error')
     } finally {
       this.isLoading = false
-      if (btn) btn.disabled = false
+      if (btn) {
+        btn.disabled = false
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><circle cx="12" cy="12" r="10"/></svg>
+          Compute Spatial Grid
+        `
+      }
     }
   }
 

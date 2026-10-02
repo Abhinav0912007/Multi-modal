@@ -183,7 +183,7 @@ export class PipelineSection {
               else if (stage.status === 'idle') statusText = 'IDLE'
 
               return `
-                <div class="stage-node-card ${nodeClass}" data-stage-id="${stage.id}" title="${stage.name}: Click to inspect workspace">
+                <div class="stage-node-card ${nodeClass}" role="button" tabindex="0" data-stage-id="${stage.id}" aria-label="Inspect ${stage.name} stage parameters: ${stage.shortDesc}" title="${stage.name}: Click to inspect workspace">
                   <div class="stage-top">
                     <span class="stage-number">0${stage.stepNumber}</span>
                     <span class="badge-status ${isActive ? 'processing' : isDone ? '' : 'idle'}" style="padding: 2px 6px; font-size: 10px;">
@@ -192,7 +192,7 @@ export class PipelineSection {
                   </div>
 
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="stage-icon-wrap">
+                    <div class="stage-icon-wrap" aria-hidden="true">
                       ${stage.icon}
                     </div>
                     <span class="stage-title">${stage.name}</span>
@@ -200,7 +200,7 @@ export class PipelineSection {
 
                   <div class="stage-body">
                     <p class="stage-desc">${stage.shortDesc}</p>
-                    <div class="stage-progress-bar">
+                    <div class="stage-progress-bar" role="progressbar" aria-valuenow="${stage.progress}" aria-valuemin="0" aria-valuemax="100" aria-label="${stage.name} progress">
                       <div class="stage-progress-fill" style="width: ${stage.progress}%;"></div>
                     </div>
                   </div>
@@ -212,14 +212,22 @@ export class PipelineSection {
       </section>
     `
 
-    // Add click listeners to open workspace modal
+    // Add click & keyboard listeners to open workspace modal
     const cards = this.container.querySelectorAll<HTMLElement>('.stage-node-card')
     cards.forEach((card) => {
-      card.addEventListener('click', () => {
+      const openModal = () => {
         const stageId = card.getAttribute('data-stage-id')
         const stage = this.stages.find((s) => s.id === stageId)
         if (stage) {
           this.onSelectStage(stage)
+        }
+      }
+
+      card.addEventListener('click', openModal)
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          openModal()
         }
       })
     })

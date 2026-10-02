@@ -15,6 +15,9 @@ export class MetadataDrawer {
 
     this.drawer = document.createElement('div')
     this.drawer.className = 'metadata-drawer-container'
+    this.drawer.setAttribute('role', 'dialog')
+    this.drawer.setAttribute('aria-modal', 'true')
+    this.drawer.setAttribute('aria-labelledby', 'drawer-title-heading')
 
     document.body.appendChild(this.backdrop)
     document.body.appendChild(this.drawer)
@@ -68,10 +71,10 @@ export class MetadataDrawer {
               ${d.processing_status}
             </span>
           </div>
-          <h3>${d.title}</h3>
+          <h3 id="drawer-title-heading">${d.title}</h3>
         </div>
-        <button id="drawer-close-btn" class="btn-close-modal" title="Close Drawer (Esc)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="drawer-close-btn" class="btn-close-modal" aria-label="Close Metadata Drawer" title="Close Drawer (Esc)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -224,8 +227,8 @@ export class MetadataDrawer {
           </svg>
           Select for Registration Pipeline
         </button>
-        <button id="btn-copy-product-id" class="hud-btn" style="padding:10px 14px;" title="Copy Product ID">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="btn-copy-product-id" class="hud-btn" style="padding:10px 14px;" aria-label="Copy Product ID" title="Copy Product ID">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>

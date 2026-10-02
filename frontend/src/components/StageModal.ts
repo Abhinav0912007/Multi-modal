@@ -25,6 +25,9 @@ export class StageModal {
     this.onOpenExportWorkspace = onOpenExportWorkspace
     this.overlay = document.createElement('div')
     this.overlay.className = 'modal-overlay'
+    this.overlay.setAttribute('role', 'dialog')
+    this.overlay.setAttribute('aria-modal', 'true')
+    this.overlay.setAttribute('aria-labelledby', 'stage-modal-title')
     document.body.appendChild(this.overlay)
 
     this.overlay.addEventListener('click', (e) => {
@@ -44,14 +47,14 @@ export class StageModal {
     this.overlay.innerHTML = `
       <div class="stage-modal-box glass-panel corner-reticle">
         <div class="modal-header">
-          <h3>
-            <div class="stage-icon-wrap" style="width:28px; height:28px;">
+          <h3 id="stage-modal-title">
+            <div class="stage-icon-wrap" style="width:28px; height:28px;" aria-hidden="true">
               ${stage.icon}
             </div>
             Stage 0${stage.stepNumber}: ${stage.name} Workspace
           </h3>
-          <button id="modal-close-btn" class="btn-close-modal" title="Close Workspace (Esc)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button id="modal-close-btn" class="btn-close-modal" aria-label="Close Workspace Details Dialog" title="Close Workspace (Esc)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -164,7 +167,7 @@ export class StageModal {
                   <rect x="3" y="3" width="18" height="18" rx="2"/>
                   <path d="M7 8h10M7 12h10M7 16h10"/>
                 </svg>
-                Transformation Analysis (Phase 9) &rarr;
+                Transformation Analysis &amp; Residuals (Stage 07) &rarr;
               </button>
             </div>
           ` : ''}
@@ -177,7 +180,7 @@ export class StageModal {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Launch Export &amp; Artifacts Workspace (Phase 10) &rarr;
+                Launch Export &amp; Artifacts Workspace (Stage 08) &rarr;
               </button>
             </div>
           ` : ''}

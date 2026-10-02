@@ -1,5 +1,6 @@
 import type { DatasetItem, DatasetFilters, CatalogSummary } from '../types'
 import { fetchDatasets, fetchCatalogSummary } from '../api'
+import { renderErrorBannerHtml } from '../services/errorHandler'
 import { DatasetCardsView } from './DatasetCardsView'
 import { DatasetTableView } from './DatasetTableView'
 import { MetadataDrawer } from './MetadataDrawer'
@@ -35,10 +36,53 @@ export class DatasetExplorer {
   }
 
   public async loadCatalog() {
-    this.datasets = await fetchDatasets(this.filters)
-    this.summary = await fetchCatalogSummary()
-    this.updateCounters()
-    this.renderCurrentView()
+    const mount = this.container.querySelector<HTMLElement>('#catalog-items-mount')
+    const counterEl = this.container.querySelector<HTMLElement>('#catalog-counter-text')
+    if (counterEl) counterEl.textContent = 'Querying archive...'
+
+    if (mount && this.datasets.length === 0) {
+      mount.innerHTML = `
+        <div style="padding: 48px; text-align: center;" role="status" aria-live="polite">
+          <div class="spinner" style="margin: 0 auto 16px auto;"></div>
+          <p style="font-family: var(--font-heading); font-size: 15px; color: var(--cyan-bright);">
+            Querying ISRO Chandrayaan Planetary Data Archive...
+          </p>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">
+            Retrieving PDS-standard level-2 metadata, ground footprints, and sensor calibrations...
+          </span>
+        </div>
+      `
+    }
+
+    try {
+      this.datasets = await fetchDatasets(this.filters)
+      this.summary = await fetchCatalogSummary()
+      this.updateCounters()
+      this.renderCurrentView()
+    } catch (err: any) {
+      console.error('Catalog query failed:', err)
+      if (mount) {
+        mount.innerHTML = renderErrorBannerHtml(err, {
+          retryBtnId: 'btn-retry-catalog',
+          retryBtnText: 'Retry Catalog Query',
+        })
+        mount.querySelector('#btn-retry-catalog')?.addEventListener('click', () => this.loadCatalog())
+      }
+      if (counterEl) counterEl.textContent = 'Catalog query offline'
+    }
+  }
+
+  public resetFilters() {
+    this.filters = {
+      query: '',
+      mission: 'all',
+      instrument: 'all',
+      productType: 'all',
+      status: 'all',
+      yearPreset: 'all',
+    }
+    this.renderSkeleton()
+    this.loadCatalog()
   }
 
   private renderSkeleton() {
@@ -49,7 +93,7 @@ export class DatasetExplorer {
           <div class="catalog-top-row">
             <!-- Search Input -->
             <div class="search-input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
@@ -57,15 +101,16 @@ export class DatasetExplorer {
                 id="catalog-search-input"
                 type="text"
                 class="search-input-field"
+                aria-label="Search planetary catalog by product identifier, region, instrument, or type"
                 placeholder="Search by Product ID, region (e.g. Mare Tranquillitatis), instrument, or type..."
                 value="${this.filters.query}"
               />
             </div>
 
             <!-- View Mode Switcher -->
-            <div class="view-mode-toggle-group">
-              <button id="view-mode-cards" class="view-toggle-btn ${this.viewMode === 'cards' ? 'active' : ''}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="view-mode-toggle-group" role="group" aria-label="Catalog View Mode">
+              <button id="view-mode-cards" class="view-toggle-btn ${this.viewMode === 'cards' ? 'active' : ''}" aria-label="Switch to Card Grid View" aria-pressed="${this.viewMode === 'cards'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="3" y="3" width="7" height="7"/>
                   <rect x="14" y="3" width="7" height="7"/>
                   <rect x="14" y="14" width="7" height="7"/>
@@ -73,8 +118,8 @@ export class DatasetExplorer {
                 </svg>
                 Cards View
               </button>
-              <button id="view-mode-table" class="view-toggle-btn ${this.viewMode === 'table' ? 'active' : ''}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button id="view-mode-table" class="view-toggle-btn ${this.viewMode === 'table' ? 'active' : ''}" aria-label="Switch to Tabular View" aria-pressed="${this.viewMode === 'table'}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <line x1="8" y1="6" x2="21" y2="6"/>
                   <line x1="8" y1="12" x2="21" y2="12"/>
                   <line x1="8" y1="18" x2="21" y2="18"/>
@@ -90,14 +135,14 @@ export class DatasetExplorer {
           <!-- Multi-dimensional Filters Row -->
           <div class="filter-controls-row">
             <!-- Mission Filter -->
-            <select id="filter-mission" class="filter-select-box" title="Filter by Mission">
+            <select id="filter-mission" class="filter-select-box" aria-label="Filter by Mission (Chandrayaan-1 or Chandrayaan-2)">
               <option value="all">All Missions (Ch-1 & Ch-2)</option>
               <option value="Chandrayaan-1" ${this.filters.mission === 'Chandrayaan-1' ? 'selected' : ''}>Chandrayaan-1</option>
               <option value="Chandrayaan-2" ${this.filters.mission === 'Chandrayaan-2' ? 'selected' : ''}>Chandrayaan-2</option>
             </select>
 
             <!-- Instrument Filter -->
-            <select id="filter-instrument" class="filter-select-box" title="Filter by Instrument">
+            <select id="filter-instrument" class="filter-select-box" aria-label="Filter by Lunar Instrument (TMC, IIRS, OHRC)">
               <option value="all">All Instruments</option>
               <option value="TMC" ${this.filters.instrument === 'TMC' ? 'selected' : ''}>TMC (Terrain Mapping Camera 1 & 2)</option>
               <option value="IIRS" ${this.filters.instrument === 'IIRS' ? 'selected' : ''}>IIRS (Imaging Infrared Spectrometer)</option>
@@ -105,7 +150,7 @@ export class DatasetExplorer {
             </select>
 
             <!-- Product Type Filter -->
-            <select id="filter-product-type" class="filter-select-box" title="Filter by Product Type">
+            <select id="filter-product-type" class="filter-select-box" aria-label="Filter by Product Type">
               <option value="all">All Product Types</option>
               <option value="calibrated" ${this.filters.productType === 'calibrated' ? 'selected' : ''}>Calibrated Products</option>
               <option value="ortho" ${this.filters.productType === 'ortho' ? 'selected' : ''}>Derived Ortho Products</option>
@@ -115,14 +160,14 @@ export class DatasetExplorer {
             </select>
 
             <!-- Date Era Filter -->
-            <select id="filter-date-preset" class="filter-select-box" title="Filter by Mission Timeline">
+            <select id="filter-date-preset" class="filter-select-box" aria-label="Filter by Mission Timeline Era">
               <option value="all">All Acquisition Dates</option>
               <option value="ch1_era" ${this.filters.yearPreset === 'ch1_era' ? 'selected' : ''}>Chandrayaan-1 Era (2008–2009)</option>
               <option value="ch2_era" ${this.filters.yearPreset === 'ch2_era' ? 'selected' : ''}>Chandrayaan-2 Era (2019+)</option>
             </select>
 
             <!-- Status Filter -->
-            <select id="filter-status" class="filter-select-box" title="Filter by Processing Status">
+            <select id="filter-status" class="filter-select-box" aria-label="Filter by Processing Status">
               <option value="all">All Statuses</option>
               <option value="Ready" ${this.filters.status === 'Ready' ? 'selected' : ''}>Ready for Registration</option>
               <option value="Complete" ${this.filters.status === 'Complete' ? 'selected' : ''}>Registration Complete</option>
@@ -130,8 +175,8 @@ export class DatasetExplorer {
             </select>
 
             <!-- Reset Filters -->
-            <button id="btn-reset-filters" class="btn-filter-reset">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button id="btn-reset-filters" class="btn-filter-reset" aria-label="Reset all catalog filters to defaults">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -139,7 +184,7 @@ export class DatasetExplorer {
             </button>
 
             <!-- Result Count Badge -->
-            <div style="margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);" id="catalog-counter-text">
+            <div style="margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);" id="catalog-counter-text" role="status" aria-live="polite">
               Loading catalog...
             </div>
           </div>
@@ -249,7 +294,8 @@ export class DatasetExplorer {
           mount,
           this.datasets,
           (d) => this.metadataDrawer.open(d),
-          (d) => this.onSelectForPipeline(d)
+          (d) => this.onSelectForPipeline(d),
+          () => this.resetFilters()
         )
       } else {
         this.cardsView.update(this.datasets)
@@ -260,7 +306,8 @@ export class DatasetExplorer {
           mount,
           this.datasets,
           (d) => this.metadataDrawer.open(d),
-          (d) => this.onSelectForPipeline(d)
+          (d) => this.onSelectForPipeline(d),
+          () => this.resetFilters()
         )
       } else {
         this.tableView.update(this.datasets)

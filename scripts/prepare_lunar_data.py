@@ -116,39 +116,73 @@ def process_pair(pair_id):
             lbl_path = os.path.splitext(primary_source)[0] + ".lbl"
             create_pds3_label(lbl_path, fname, lines, samples, sample_bits, sample_type, instrument=inst, mission=mission)
 
-            # Extract calibrated GeoTIFF patch (e.g. center window) for instant web preview & fast matching
-            crop_lines = min(4000, lines)
-            crop_samples = min(4000, samples)
-            l0 = min(10000, max(0, lines // 2 - crop_lines // 2))
-            s0 = 0
-
+            # For pushbroom lunar sensors with unilluminated night/shadow areas, detect peak illuminated region
             mmap = np.memmap(primary_source, dtype=dtype, mode="r", shape=(lines, samples))
-            patch = np.array(mmap[l0:l0 + crop_lines, s0:s0 + crop_samples])
+            step = max(1, lines // 100)
+            sample_means = [float(np.mean(mmap[l])) for l in range(0, lines, step)]
+            peak_idx = int(np.argmax(sample_means))
+            best_line = peak_idx * step
 
-            # Normalize valid pixels
-            if patch.dtype in (np.float32, np.float64):
-                vmask = np.isfinite(patch) & (patch > -1e10) & (patch < 1e10)
-                if np.count_nonzero(vmask) > 0:
-                    p1 = float(np.percentile(patch[vmask], 1))
-                    p99 = float(np.percentile(patch[vmask], 99))
-                    norm = np.clip((patch - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    norm[~vmask] = 0
-                else:
-                    norm = np.zeros(patch.shape, dtype=np.uint8)
+            if inst == "OHRC":
+                # For OHRC (50537 lines x 12000 samples), downsample proportionally for web preview
+                src_sub = np.array(mmap[::10, ::10]) # shape: (5054, 1200)
+                valid_src = src_sub > 257
+                sp1 = float(np.percentile(src_sub[valid_src], 0.5)) if valid_src.sum() > 0 else 257
+                sp99 = float(np.percentile(src_sub[valid_src], 99.5)) if valid_src.sum() > 0 else 25000
+                norm_preview = np.clip((src_sub.astype(float) - sp1) / (sp99 - sp1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                norm_preview[src_sub <= 257] = np.clip((src_sub[src_sub <= 257].astype(float) / 257.0) * 15.0, 0, 15).astype(np.uint8)
+
+                thumb_out = os.path.join(source_dir, "source_preview.png")
+                cv2.imwrite(thumb_out, norm_preview)
+                print(f"  [Preview] Saved authentic OHRC overview: {thumb_out} ({norm_preview.shape})")
+
+                # Save illuminated lunar zone (lines 38000..48000, 10000x12000)
+                illum_zone = np.array(mmap[38000:48000, :])
+                v_illum = illum_zone > 257
+                ip1 = float(np.percentile(illum_zone[v_illum], 0.5)) if v_illum.sum() > 0 else 257
+                ip99 = float(np.percentile(illum_zone[v_illum], 99.5)) if v_illum.sum() > 0 else 25000
+                illum_8u = np.clip((illum_zone.astype(float) - ip1) / (ip99 - ip1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                illum_8u[illum_zone <= 257] = 0
+
+                tif_out = os.path.join(source_dir, "source.tif")
+                tifffile.imwrite(tif_out, illum_8u)
+                print(f"  [GeoTIFF] Saved calibrated source raster: {tif_out} ({illum_8u.shape})")
             else:
-                p1 = float(np.percentile(patch, 1))
-                p99 = float(np.percentile(patch, 99))
-                norm = np.clip((patch.astype(float) - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                crop_lines = min(4000, lines)
+                crop_samples = min(4000, samples)
+                l0 = max(0, min(lines - crop_lines, best_line - crop_lines // 2))
+                s0 = 0
 
-            # Save source.tif GeoTIFF & source_preview.png
-            tif_out = os.path.join(source_dir, "source.tif")
-            tifffile.imwrite(tif_out, norm)
-            print(f"  [GeoTIFF] Saved calibrated source raster: {tif_out} ({norm.shape})")
+                patch = np.array(mmap[l0:l0 + crop_lines, s0:s0 + crop_samples])
 
-            thumb_out = os.path.join(source_dir, "source_preview.png")
-            thumb_resized = cv2.resize(norm, (600, int(600 * norm.shape[0] / norm.shape[1])))
-            cv2.imwrite(thumb_out, thumb_resized)
-            print(f"  [Preview] Saved web thumbnail: {thumb_out}")
+                # Normalize valid pixels
+                if patch.dtype in (np.float32, np.float64):
+                    vmask = np.isfinite(patch) & (patch > -1e10) & (patch < 1e10)
+                    if np.count_nonzero(vmask) > 0:
+                        p1 = float(np.percentile(patch[vmask], 0.5))
+                        p99 = float(np.percentile(patch[vmask], 99.5))
+                        norm = np.clip((patch - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                        norm[~vmask] = 0
+                    else:
+                        norm = np.zeros(patch.shape, dtype=np.uint8)
+                else:
+                    pos = patch > 0
+                    if np.count_nonzero(pos) > 0:
+                        p1 = float(np.percentile(patch[pos], 0.5))
+                        p99 = float(np.percentile(patch[pos], 99.5))
+                        norm = np.clip((patch.astype(float) - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                        norm[~pos] = 0
+                    else:
+                        norm = np.zeros(patch.shape, dtype=np.uint8)
+
+                tif_out = os.path.join(source_dir, "source.tif")
+                tifffile.imwrite(tif_out, norm)
+                print(f"  [GeoTIFF] Saved calibrated source raster: {tif_out} ({norm.shape})")
+
+                thumb_out = os.path.join(source_dir, "source_preview.png")
+                thumb_resized = cv2.resize(norm, (600, int(600 * norm.shape[0] / norm.shape[1])))
+                cv2.imwrite(thumb_out, thumb_resized)
+                print(f"  [Preview] Saved web thumbnail: {thumb_out}")
 
             src_meta = {
                 "filename": fname,
@@ -181,25 +215,39 @@ def process_pair(pair_id):
         ref_patch_8u = None
         ref_lines, ref_samples = 41340, 704
 
-        if rfname.lower().endswith(".img"):
-            # LROC NAC CDR PDS3 format: 41340 lines x 704 samples, PC_REAL float32, offset 10560 (15 * 704)
+        if rfname.lower().endswith(".img") and "wac" in rfname.lower() or "cc" in rfname.lower():
+            # LROC WAC Color CDR PDS3 format: 530 frames of 78 lines x 704 samples
+            # De-stripe by extracting single optical band (Band 6 Visible 643nm, rows 50..64)
             offset = 15 * 704
             m_ref = np.memmap(primary_ref, dtype="<f4", mode="r", offset=offset, shape=(41340, 704))
-            
-            # Find window with authentic non-null lunar terrain
-            # Sample across central strip
-            l0 = 15000
-            l1 = 25000
-            ref_crop = np.array(m_ref[l0:l1, :])
+            b6_frames = []
+            for f in range(530):
+                b6_frames.append(np.array(m_ref[f * 78 + 50 : f * 78 + 64, :]))
+            ref_b6 = np.vstack(b6_frames) # shape (7420, 704)
+            ref_lines, ref_samples = ref_b6.shape
+            valid_ref = np.isfinite(ref_b6) & (ref_b6 > -100) & (ref_b6 < 10)
+            if np.count_nonzero(valid_ref) > 1000:
+                p1 = float(np.percentile(ref_b6[valid_ref], 1.0))
+                p99 = float(np.percentile(ref_b6[valid_ref], 99.0))
+                ref_patch_8u = np.clip((ref_b6 - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                ref_patch_8u[~valid_ref] = 0
+            else:
+                ref_patch_8u = np.zeros(ref_b6.shape, dtype=np.uint8)
 
-            valid_mask = (ref_crop > -100) & (ref_crop < 10) & np.isfinite(ref_crop)
+        elif rfname.lower().endswith(".img"):
+            # LROC NAC format: 52224 lines x 2532 samples, int16
+            offset = 5064
+            ref_lines, ref_samples = 52224, 2532
+            m_ref = np.memmap(primary_ref, dtype="<i2", mode="r", offset=offset, shape=(ref_lines, ref_samples))
+            ref_crop = np.array(m_ref[15000:25000, :])
+            valid_mask = ref_crop > 0
             if np.count_nonzero(valid_mask) > 1000:
-                p1 = float(np.percentile(ref_crop[valid_mask], 1))
-                p99 = float(np.percentile(ref_crop[valid_mask], 99))
+                p1 = float(np.percentile(ref_crop[valid_mask], 1.0))
+                p99 = float(np.percentile(ref_crop[valid_mask], 99.0))
                 ref_patch_8u = np.clip((ref_crop - p1) / (p99 - p1 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
                 ref_patch_8u[~valid_mask] = 0
             else:
-                ref_patch_8u = np.zeros((10000, 704), dtype=np.uint8)
+                ref_patch_8u = np.zeros(ref_crop.shape, dtype=np.uint8)
 
         elif rfname.lower().endswith((".tif", ".tiff")):
             with tifffile.TiffFile(primary_ref) as tf:

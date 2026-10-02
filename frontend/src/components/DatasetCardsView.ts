@@ -1,21 +1,25 @@
 import type { DatasetItem } from '../types'
+import { renderEmptyDatasetState } from '../services/errorHandler'
 
 export class DatasetCardsView {
   private container: HTMLElement
   private datasets: DatasetItem[]
   private onSelectDataset: (dataset: DatasetItem) => void
   private onSelectForPipeline: (dataset: DatasetItem) => void
+  private onResetFilters?: () => void
 
   constructor(
     container: HTMLElement,
     datasets: DatasetItem[],
     onSelectDataset: (dataset: DatasetItem) => void,
-    onSelectForPipeline: (dataset: DatasetItem) => void
+    onSelectForPipeline: (dataset: DatasetItem) => void,
+    onResetFilters?: () => void
   ) {
     this.container = container
     this.datasets = datasets
     this.onSelectDataset = onSelectDataset
     this.onSelectForPipeline = onSelectForPipeline
+    this.onResetFilters = onResetFilters
     this.render()
   }
 
@@ -26,16 +30,17 @@ export class DatasetCardsView {
 
   public render() {
     if (this.datasets.length === 0) {
-      this.container.innerHTML = `
-        <div style="grid-column: 1 / -1; padding: 60px 20px; text-align: center; color: var(--text-muted); font-family: var(--font-mono);">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 12px; opacity: 0.5;">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <p style="font-size: 14px; color: var(--text-secondary);">No lunar datasets matched the selected filter criteria.</p>
-          <p style="font-size: 11px; margin-top: 4px;">Try adjusting search terms, clearing filters, or switching mission eras.</p>
-        </div>
-      `
+      this.container.innerHTML = renderEmptyDatasetState({
+        title: 'No Lunar Datasets Found',
+        message: 'No planetary rasters matched your current filter criteria or search keyword.',
+        actionNext: 'Clear your search query or reset the mission, instrument, and product type filters to view all 10 calibrated Chandrayaan products.',
+        actionBtnText: 'Reset Filter Criteria',
+        actionBtnId: 'btn-empty-reset-filters',
+      })
+
+      this.container.querySelector('#btn-empty-reset-filters')?.addEventListener('click', () => {
+        if (this.onResetFilters) this.onResetFilters()
+      })
       return
     }
 

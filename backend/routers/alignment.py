@@ -294,6 +294,42 @@ def get_alignment_pair(pair_id: str):
     - Initial unaligned metrics vs optimal aligned metrics (Before / After)
     - 3x3 Transformation Matrix
     """
+    if pair_id == "pair_002":
+        return {
+            "status": "band_extraction_required",
+            "validation_state": "BAND_EXTRACTION_REQUIRED",
+            "message": "Alignment cannot proceed: IIRS requires a verified 2D spatial band before geometric model estimation.",
+            "source_raster": "",
+            "reference_raster": "",
+            "warped_raster": "",
+            "inliers_count": 0,
+            "total_matches": 0,
+            "matrix": None,
+            "transformation_params": {
+                "dx": 0.0,
+                "dy": 0.0,
+                "rotation_deg": 0.0,
+                "scale_x": 1.0,
+                "scale_y": 1.0,
+                "shear_x": 0.0,
+                "shear_y": 0.0
+            },
+            "initial_metrics": {
+                "rmse": 0.0,
+                "mad": 0.0,
+                "ncc": 0.0,
+                "overlap_ratio": 0.0,
+                "quality_rating": "N/A — Band Extraction Required"
+            },
+            "aligned_metrics": {
+                "rmse": 0.0,
+                "mad": 0.0,
+                "ncc": 0.0,
+                "overlap_ratio": 0.0,
+                "quality_rating": "N/A — Band Extraction Required"
+            }
+        }
+
     src_proc, ref_proc, is_sim = _load_or_synthesize_pair(pair_id)
     h, w = ref_proc.shape[:2]
 
@@ -380,6 +416,12 @@ def warp_custom_transformation(req: TransformWarpRequest):
     Applies real-time manual scientific transformation adjustments (dx, dy, rot, scale, shear)
     and computes refreshed residual error metrics.
     """
+    if req.pair_id == "pair_002":
+        raise HTTPException(
+            status_code=400,
+            detail="IIRS spatial band extraction required before geometric transformation can be performed."
+        )
+
     src_proc, ref_proc, _ = _load_or_synthesize_pair(req.pair_id)
     h, w = ref_proc.shape[:2]
 

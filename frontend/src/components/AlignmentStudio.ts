@@ -13,6 +13,7 @@ import {
   type AlignmentParameters,
   type AlignmentMetrics,
 } from '../api'
+import { formatHumanReadableError, showHumanToast } from '../services/errorHandler'
 
 export type AlignmentCompareMode =
   | 'opacity'
@@ -619,10 +620,12 @@ export class AlignmentStudio {
       this.startFlickerTimer()
     } catch (err: any) {
       console.error('Failed to load alignment pair data:', err)
-      this.errorMessage = err.message || 'Error loading rasters'
-      if (statusText) statusText.textContent = 'ERROR LOADING RASTERS'
+      const formatted = formatHumanReadableError(err)
+      this.errorMessage = formatted.message
+      if (statusText) statusText.textContent = formatted.message
       const statusPill = this.rootEl.querySelector('#align-status-pill')
       if (statusPill) statusPill.className = 'status-pill status-error'
+      showHumanToast(err, 'error')
     } finally {
       this.isLoading = false
     }

@@ -272,6 +272,82 @@ export class ScientificImageViewer {
         this.canvasWrap.style.cursor = 'grab'
       }
     })
+
+    // Touch Gestures (Mobile & Tablet)
+    let touchStartDist = 0
+    let isTouchPinch = false
+
+    this.canvasWrap.addEventListener('touchstart', (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        const rect = this.canvasWrap.getBoundingClientRect()
+        const touchX = touch.clientX - rect.left
+
+        if (this.comparisonMode === 'split') {
+          const splitX = rect.width * this.splitRatio
+          if (Math.abs(touchX - splitX) < 28) {
+            this.isDraggingSplitter = true
+            return
+          }
+        }
+
+        this.isPanning = true
+        this.panStartX = touch.clientX
+        this.panStartY = touch.clientY
+      } else if (e.touches.length === 2) {
+        this.isPanning = false
+        this.isDraggingSplitter = false
+        isTouchPinch = true
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        touchStartDist = Math.hypot(dx, dy)
+      }
+    }, { passive: false })
+
+    window.addEventListener('touchmove', (e: TouchEvent) => {
+      if (this.isDraggingSplitter && e.touches.length === 1) {
+        const rect = this.canvasWrap.getBoundingClientRect()
+        const touchX = e.touches[0].clientX - rect.left
+        this.splitRatio = Math.max(0.05, Math.min(0.95, touchX / rect.width))
+        this.updateSplitterPos()
+        this.requestRender()
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+
+      if (this.isPanning && e.touches.length === 1) {
+        const touch = e.touches[0]
+        const dx = touch.clientX - this.panStartX
+        const dy = touch.clientY - this.panStartY
+        this.panStartX = touch.clientX
+        this.panStartY = touch.clientY
+        this.viewport.panBy(dx, dy)
+        if (e.cancelable) e.preventDefault()
+        return
+      }
+
+      if (isTouchPinch && e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const currentDist = Math.hypot(dx, dy)
+        if (touchStartDist > 0 && Math.abs(currentDist - touchStartDist) > 2) {
+          const factor = currentDist / touchStartDist
+          const rect = this.canvasWrap.getBoundingClientRect()
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+          this.viewport.zoomBy(factor, midX, midY)
+          touchStartDist = currentDist
+        }
+        if (e.cancelable) e.preventDefault()
+      }
+    }, { passive: false })
+
+    window.addEventListener('touchend', () => {
+      this.isPanning = false
+      this.isDraggingSplitter = false
+      isTouchPinch = false
+      touchStartDist = 0
+    })
   }
 
   private updateSplitterPos() {

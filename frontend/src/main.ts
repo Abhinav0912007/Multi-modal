@@ -1,5 +1,5 @@
 import './style.css'
-import type { SystemStatus, PairItem, RegistrationMetrics, PipelineConfig, StageInfo, DatasetItem } from './types'
+import type { SystemStatus, PairItem, RegistrationMetrics, PipelineConfig, StageInfo, DatasetItem, RoiCoordinates } from './types'
 import { checkBackendHealth, fetchAvailablePairs } from './api'
 import { Header } from './components/Header'
 import { LunarHero } from './components/LunarHero'
@@ -10,6 +10,7 @@ import { StageModal } from './components/StageModal'
 import { LaunchController } from './components/LaunchController'
 import { DatasetExplorer } from './components/DatasetExplorer'
 import { RoiExplorer } from './components/RoiExplorer'
+import { PreprocessingWorkspace } from './components/PreprocessingWorkspace'
 import { FeatureWorkspace } from './components/FeatureWorkspace'
 import { SpatialWorkspace } from './components/SpatialWorkspace'
 import { AlignmentStudio } from './components/AlignmentStudio'
@@ -21,9 +22,27 @@ import { jobService } from './services/jobService'
 import { StarfieldBackdrop } from './components/StarfieldBackdrop'
 import { GuidedMissionWorkflow } from './components/GuidedMissionWorkflow'
 import { DemonstrationSummaryModal } from './components/DemonstrationSummaryModal'
+import { showHumanToast } from './services/errorHandler'
 
 // Current active view
-type ActiveTab = 'mission-control' | 'dataset-explorer' | 'roi-explorer' | 'feature-correspondence' | 'spatial-analysis' | 'alignment-studio' | 'transformation-analysis' | 'export-workspace' | 'job-center'
+export type ActiveTab =
+  | 'home'
+  | 'dataset'
+  | 'roi'
+  | 'preprocessing'
+  | 'feature-correspondence'
+  | 'spatial-analysis'
+  | 'alignment'
+  | 'transformation'
+  | 'export'
+  | 'job-center'
+  // Backward compatibility aliases
+  | 'mission-control'
+  | 'dataset-explorer'
+  | 'roi-explorer'
+  | 'alignment-studio'
+  | 'transformation-analysis'
+  | 'export-workspace'
 
 // Initial application state
 const state: {
@@ -34,303 +53,436 @@ const state: {
   metrics: RegistrationMetrics | null
   isProcessing: boolean
 } = {
-  currentTab: 'mission-control',
+  currentTab: 'home',
   systemStatus: {
     backendOnline: false,
     activePair: 'pair_001',
     processingStatus: 'IDLE',
     currentStage: 'READY FOR INGESTION',
-    mission: 'Chandrayaan-1',
+    mission: 'Chandrayaan-2',
   },
   pairs: [],
   selectedPair: null,
-  metrics: null, // Initial metrics are null, displaying '—'
+  metrics: null,
   isProcessing: false,
 }
 
 // Target DOM container
 const appEl = document.querySelector<HTMLDivElement>('#app')!
 
-// Phase 14: Subtle Procedural Deep Space Backdrop (Stars, Nebula Haze, Orbital Lines, Coordinate Grid)
+// Phase 14: Subtle Procedural Deep Space Backdrop
 const starfieldBackdrop = new StarfieldBackdrop()
 void starfieldBackdrop
 
-// Build base layout structure with Main Navigation Bar
+// Build base layout structure with Approved Modern Minimal Navbar
 appEl.innerHTML = `
-  <!-- TOP NAVIGATION BAR -->
-  <nav class="main-nav-bar">
-    <div class="nav-tabs-group">
-      <button id="nav-btn-mission" class="nav-tab-btn active">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-30 12 12)"/>
+  <!-- TOP MODERN MINIMAL NAVBAR -->
+  <header class="premium-navbar" role="banner">
+    <!-- Brand Logo -->
+    <button id="nav-btn-logo" class="nav-brand-group" aria-label="ISRO Chandrayaan Lunar Image Registration">
+      <div class="brand-emblem-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" stroke="#38bdf8"/>
+          <ellipse cx="12" cy="12" rx="11" ry="4" stroke="#f59e0b" stroke-width="1.5" transform="rotate(-25 12 12)"/>
+          <circle cx="19" cy="7" r="1.5" fill="#38bdf8"/>
         </svg>
-        Mission Control Dashboard
-      </button>
+      </div>
+      <div class="brand-wordmark">
+        <span class="brand-title-text">CHANDRAYAAN</span>
+        <span class="brand-subtitle-text">LUNAR REGISTRATION</span>
+      </div>
+    </button>
 
-      <button id="nav-btn-catalog" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <ellipse cx="12" cy="5" rx="9" ry="3"/>
-          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-        </svg>
-        Lunar Dataset Explorer
-        <span class="badge-counter" id="nav-catalog-count">10 Products</span>
-      </button>
+    <!-- Clean Modern Pill Navigation (Actual Process Names) -->
+    <nav class="nav-center-menu" role="navigation" aria-label="Process Workflow">
+      <div class="nav-pill-container" role="tablist">
+        <button id="nav-btn-home" class="nav-link-btn active" role="tab" aria-selected="true">Home</button>
+        <button id="nav-btn-dataset" class="nav-link-btn" role="tab" aria-selected="false">Dataset</button>
+        <button id="nav-btn-roi" class="nav-link-btn" role="tab" aria-selected="false">ROI</button>
+        <button id="nav-btn-preprocessing" class="nav-link-btn" role="tab" aria-selected="false">Preprocessing</button>
+        <button id="nav-btn-feature" class="nav-link-btn" role="tab" aria-selected="false">Feature Correspondence</button>
+        <button id="nav-btn-spatial" class="nav-link-btn" role="tab" aria-selected="false">Spatial Analysis</button>
+        <button id="nav-btn-alignment" class="nav-link-btn" role="tab" aria-selected="false">Alignment</button>
+        <button id="nav-btn-transformation" class="nav-link-btn" role="tab" aria-selected="false">Transformation</button>
+        <button id="nav-btn-export" class="nav-link-btn" role="tab" aria-selected="false">Export</button>
+      </div>
+    </nav>
 
-      <button id="nav-btn-roi" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="22" y1="12" x2="18" y2="12"/>
-          <line x1="6" y1="12" x2="2" y2="12"/>
-          <line x1="12" y1="6" x2="12" y2="2"/>
-          <line x1="12" y1="22" x2="12" y2="18"/>
+    <!-- Right Primary CTA -->
+    <div class="nav-right-actions">
+      <button id="nav-btn-start-cta" class="btn-nav-primary-cta" title="Launch registration workflow">
+        <span>Start Registration</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
         </svg>
-        Scientific ROI Explorer
-        <span class="badge-counter" style="background: rgba(56, 189, 248, 0.15); color: var(--cyan-bright); border: 1px solid rgba(56, 189, 248, 0.3);">Stage 02</span>
-      </button>
-
-      <button id="nav-btn-correspondence" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="6" cy="12" r="3"/>
-          <circle cx="18" cy="12" r="3"/>
-          <line x1="9" y1="12" x2="15" y2="12"/>
-          <path d="M6 9a6 6 0 0 1 12 0"/>
-        </svg>
-        Feature Correspondence
-        <span class="badge-counter" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-status); border: 1px solid rgba(16, 185, 129, 0.3);">Stage 03</span>
-      </button>
-
-      <button id="nav-btn-spatial" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-        </svg>
-        Spatial Grid & Density
-        <span class="badge-counter" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">Stage 05</span>
-      </button>
-
-      <button id="nav-btn-alignment" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-        </svg>
-        Alignment Studio
-        <span class="badge-counter" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-status); border: 1px solid rgba(16, 185, 129, 0.3);">Stage 06 & 07</span>
-      </button>
-
-      <button id="nav-btn-transformation" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <path d="M7 8h10M7 12h10M7 16h10"/>
-        </svg>
-        Transformation Analysis
-        <span class="badge-counter" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">Phase 09</span>
-      </button>
-
-      <button id="nav-btn-export" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Export &amp; Artifacts
-        <span class="badge-counter" style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3);">Phase 10</span>
-      </button>
-
-      <button id="nav-btn-job-center" class="nav-tab-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-        Job Center
-        <span class="badge-counter" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3);">Telemetry</span>
       </button>
     </div>
+  </header>
 
-    <div style="display:flex; align-items:center; gap:12px; font-family:var(--font-mono); font-size:11px;">
-      <span style="color:var(--text-muted);">ISRO CHANDRAYAAN PROGRAM</span>
-      <span style="color:var(--border-card);">|</span>
-      <span style="color:var(--cyan-bright); font-weight:600;">CATALOG v2.0</span>
-    </div>
-  </nav>
-
-  <!-- GUIDED MISSION RUN WORKFLOW (PHASE 15: JUDGING & DEMO) -->
-  <div id="guided-workflow-mount"></div>
-
-  <!-- VIEW 1: MISSION CONTROL DASHBOARD -->
-  <div id="view-mission-control" style="display:flex; flex-direction:column; gap:20px;">
-    <!-- HEADER MOUNT -->
+  <!-- Hidden background mounts for existing background telemetry & controllers -->
+  <div style="display:none;" aria-hidden="true">
     <div id="header-mount"></div>
-
-    <!-- HERO SECTION: Lunar Celestial Visualization + Dataset Card -->
-    <div class="hero-container">
-      <div class="lunar-viewport-card glass-panel corner-reticle">
-        <!-- 3D Canvas Mount -->
-        <div id="lunar-canvas-mount" class="lunar-canvas-wrap"></div>
-
-        <!-- Top HUD Overlay -->
-        <div class="hero-hud-top">
-          <div class="hud-title-box">
-            <h3>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-30 12 12)"/>
-              </svg>
-              Lunar Coordinate Tracking & Orbital Telemetry
-            </h3>
-            <p>TMC Polar Ground Track • Altitude: 100.0 km • Inclination: 89.9°</p>
-          </div>
-
-          <div class="hero-controls-bar">
-            <button id="btn-toggle-rotate" class="hud-btn active" title="Toggle Auto-Rotation">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              Rotation
-            </button>
-            <button id="btn-toggle-grid" class="hud-btn active" title="Toggle Coordinate Grid">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
-              Lat/Lon Grid
-            </button>
-            <button id="btn-toggle-orbit" class="hud-btn active" title="Toggle Orbital Path">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-45 12 12)"/></svg>
-              Orbit
-            </button>
-            <button id="btn-toggle-footprint" class="hud-btn active" title="Toggle TMC Ground Swath">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
-              TMC Footprint
-            </button>
-            <button id="btn-reset-view" class="hud-btn" title="Reset Camera View">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-              Reset
-            </button>
-          </div>
-        </div>
-
-        <!-- Bottom HUD Floating Telemetry -->
-        <div class="hero-hud-bottom">
-          <div class="telemetry-readout-box">
-            <div class="telemetry-item">
-              <span class="k">Sub-Spacecraft Lat:</span>
-              <span id="hud-sc-lat" class="v">00°00'00" N</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="k">Sub-Spacecraft Lon:</span>
-              <span id="hud-sc-lon" class="v">00°00'00" E</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="k">Orbital Altitude:</span>
-              <span id="hud-sc-alt" class="v">100.2 km</span>
-            </div>
-          </div>
-
-          <div class="telemetry-readout-box" style="text-align: right;">
-            <div class="telemetry-item">
-              <span class="k">Sub-Solar Point:</span>
-              <span class="v">01°14' S, 44°30' W</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="k">Sensor Swath:</span>
-              <span class="v" style="color:var(--isro-gold);">20 km Across-track (TMC)</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="k">Camera Mode:</span>
-              <span class="v">Stereo Triplet (Fore/Nadir/Aft)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- DATASET CARD MOUNT -->
-      <div id="dataset-card-mount" class="dataset-telemetry-col"></div>
-    </div>
-
-    <!-- PIPELINE SECTION MOUNT -->
+    <div id="dataset-card-mount"></div>
     <div id="pipeline-mount"></div>
-
-    <!-- STATISTICS SECTION MOUNT -->
     <div id="statistics-mount"></div>
+    <div id="console-body"></div>
+    <div id="guided-workflow-mount"></div>
+  </div>
 
-    <!-- COLLAPSIBLE MISSION TELEMETRY LOG -->
-    <div class="glass-panel" style="padding: 12px 18px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;" id="console-toggle">
-        <span style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan-bright); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px;">
-          <span class="pulse-dot"></span>
-          Mission Control Event Stream & Console Telemetry
-        </span>
-        <span id="console-chevron" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">[LIVE]</span>
-      </div>
-      <div id="console-body" class="live-console-wrap" style="margin-top: 10px;">
-        <div class="console-entry">
-          <span class="ts">[INIT]</span>
-          <span>ISRO Chandrayaan TMC Image Registration System ready. Standby for target ingestion.</span>
+  <!-- VIEW 1: HOME PAGE (CLEAN DARK SPACE • 3D MOON VISUALIZATION • MINIMAL HERO) -->
+  <div id="view-home" role="tabpanel" aria-labelledby="nav-btn-home" tabindex="0" class="home-page-container">
+    <!-- HERO VIEWPORT -->
+    <section class="home-hero-viewport" aria-label="Lunar Mission Hero">
+      <!-- Seamless 3D Moon Canvas Centerpiece -->
+      <div id="lunar-canvas-mount" class="full-screen-moon-canvas" aria-label="3D Interactive Lunar Sphere"></div>
+
+      <!-- Soft ambient depth haze behind the moon -->
+      <div class="space-atmospheric-depth" aria-hidden="true"></div>
+
+      <!-- Left Editorial Overlay -->
+      <div class="hero-editorial-overlay">
+        <div class="hero-eyebrow">
+          <span class="eyebrow-dot"></span>
+          <span>LUNAR OBSERVATION &bull; MULTI-MODAL IMAGING</span>
+        </div>
+
+        <h1 class="hero-headline">
+          PRECISION<br />
+          <span class="hero-gradient-text">LUNAR IMAGE</span><br />
+          CORRESPONDENCE
+        </h1>
+
+        <p class="hero-description">
+          Register heterogeneous Chandrayaan imagery against lunar reference products using robust feature correspondence and geometric alignment.
+        </p>
+
+        <div class="hero-cta-group">
+          <button id="hero-btn-start" class="btn-hero-primary" aria-label="Scroll to Dataset Selection">
+            <span>START REGISTRATION &rarr;</span>
+          </button>
+          <button id="hero-btn-datasets" class="btn-hero-secondary" aria-label="Scroll to Dataset Selection">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span>EXPLORE DATASETS</span>
+          </button>
         </div>
       </div>
+
+      <!-- Three Subtle Scientific Floating Annotations -->
+      <div class="floating-story-tag tag-top-right" aria-hidden="true">
+        <span class="story-tag-dot cyan"></span>
+        <div>
+          <span class="story-tag-title">MULTI-MODAL OBSERVATION</span>
+          <span class="story-tag-sub">OHRC &bull; TMC &bull; IIRS</span>
+        </div>
+      </div>
+
+      <div class="floating-story-tag tag-bottom-right" aria-hidden="true">
+        <span class="story-tag-dot gold"></span>
+        <div>
+          <span class="story-tag-title">LUNAR REFERENCE</span>
+          <span class="story-tag-sub">LROC NAC / WAC</span>
+        </div>
+      </div>
+
+      <div class="floating-story-tag tag-bottom-center" aria-hidden="true">
+        <span class="story-tag-dot violet"></span>
+        <div>
+          <span class="story-tag-title">PRECISION CORRESPONDENCE</span>
+          <span class="story-tag-sub">Feature-based registration</span>
+        </div>
+      </div>
+
+      <!-- Subtle Scroll Down Indicator -->
+      <a href="#section-dataset-selection" class="hero-scroll-cue" id="hero-scroll-link" aria-label="Scroll to Dataset Selection">
+        <span>CHOOSE DATASET &amp; WORKFLOW</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </a>
+    </section>
+
+    <!-- SECTION 1: ACTIVE SESSION BANNER (Visible if session already initialized) -->
+    <div id="home-active-session-banner" class="home-active-session-strip" style="display:none;" aria-live="polite">
+      <div class="active-session-left">
+        <span class="session-pulse-indicator"></span>
+        <div class="session-info">
+          <span class="session-label">CURRENT ACTIVE SESSION</span>
+          <span class="session-dataset-name" id="banner-session-name">PAIR_001 &bull; Chandrayaan-2 OHRC</span>
+        </div>
+      </div>
+      <div class="active-session-right">
+        <span class="session-stage-badge" id="banner-session-stage">Current Stage: ROI</span>
+        <button id="banner-btn-continue" class="btn-banner-continue">
+          <span>Continue Registration &rarr;</span>
+        </button>
+      </div>
     </div>
+
+    <!-- SECTION 2: CHOOSE YOUR DATASET -->
+    <section id="section-dataset-selection" class="home-scroll-section" aria-label="Dataset Selection">
+      <div class="section-header-block">
+        <span class="section-eyebrow">STEP 01 OF THE SCIENTIFIC PIPELINE</span>
+        <h2 class="section-title">CHOOSE YOUR DATASET</h2>
+        <p class="section-subtitle">
+          Select the Chandrayaan image you want to register against a lunar reference.
+        </p>
+      </div>
+
+      <div class="home-dataset-select-card">
+        <div class="dataset-select-field-group">
+          <label for="home-dataset-dropdown" class="dataset-dropdown-label">
+            <span>SELECT DATASET</span>
+            <span class="dataset-catalog-link-hint" id="link-open-full-catalog" title="Open Complete Multi-modal Dataset Catalog">Explore Catalog &rarr;</span>
+          </label>
+          <div class="dataset-dropdown-wrapper">
+            <select id="home-dataset-dropdown" class="home-dataset-select-element" aria-label="Select Chandrayaan Dataset Pair">
+              <option value="pair_001">PAIR_001 &bull; Chandrayaan-2 OHRC</option>
+              <option value="pair_002">PAIR_002 &bull; Chandrayaan-2 IIRS</option>
+              <option value="pair_003">PAIR_003 &bull; Chandrayaan-1 TMC</option>
+            </select>
+            <div class="select-dropdown-chevron" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selected Dataset Summary -->
+        <div id="home-selected-dataset-summary" class="dataset-compact-summary-grid">
+          <div class="summary-metric-col">
+            <span class="metric-caption">MISSION</span>
+            <span class="metric-text" id="summary-val-mission">Chandrayaan-2</span>
+          </div>
+          <div class="summary-metric-col">
+            <span class="metric-caption">INSTRUMENT</span>
+            <span class="metric-text" id="summary-val-instrument">OHRC</span>
+          </div>
+          <div class="summary-metric-col source-col">
+            <span class="metric-caption">SOURCE</span>
+            <span class="metric-text font-mono truncate-path" id="summary-val-source">ch2_ohr_ncp_20240316T2008014680_d_img_d18.img</span>
+          </div>
+          <div class="summary-metric-col">
+            <span class="metric-caption">REFERENCE</span>
+            <span class="metric-text" id="summary-val-reference">LROC WAC</span>
+          </div>
+          <div class="summary-metric-col">
+            <span class="metric-caption">STATUS</span>
+            <span class="summary-status-pill ready" id="summary-val-status">Ready</span>
+          </div>
+        </div>
+
+        <!-- Primary Start Registration Action -->
+        <div class="dataset-selection-cta-wrap">
+          <button id="home-btn-start-registration" class="btn-home-start-workflow" aria-label="Start Scientific Registration Workflow">
+            <span>START REGISTRATION &rarr;</span>
+          </button>
+          <span class="cta-micro-annotation">Initializes active registration session and proceeds to ROI stage. Algorithms execute only when intentionally invoked.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: REGISTRATION WORKFLOW (PROCESS FLOW SECTION) -->
+    <section id="section-registration-workflow" class="home-scroll-section" aria-label="Scientific Process Workflow">
+      <div class="section-header-block">
+        <span class="section-eyebrow">SYSTEM ARCHITECTURE</span>
+        <h2 class="section-title">REGISTRATION WORKFLOW</h2>
+        <p class="section-subtitle">
+          Sequential scientific pipeline. Each stage is entered intentionally with verified intermediate results.
+        </p>
+      </div>
+
+      <!-- Clean Minimal 8-Stage Timeline -->
+      <div class="workflow-stepper-container" role="list">
+        <div class="stepper-step-card active" data-tab="dataset" role="listitem" title="Click to view Dataset Explorer">
+          <span class="step-badge">01</span>
+          <span class="step-title">DATASET</span>
+          <p class="step-desc">Select source and reference imagery.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="roi" role="listitem" title="Click to view ROI Selection">
+          <span class="step-badge">02</span>
+          <span class="step-title">ROI</span>
+          <p class="step-desc">Choose the lunar region to process.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="preprocessing" role="listitem" title="Click to view Preprocessing">
+          <span class="step-badge">03</span>
+          <span class="step-title">PREPROCESSING</span>
+          <p class="step-desc">Prepare imagery for robust feature extraction.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="feature-correspondence" role="listitem" title="Click to view Feature Correspondence">
+          <span class="step-badge">04</span>
+          <span class="step-title">FEATURE CORRESPONDENCE</span>
+          <p class="step-desc">Find corresponding image features.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="spatial-analysis" role="listitem" title="Click to view Spatial Analysis">
+          <span class="step-badge">05</span>
+          <span class="step-title">SPATIAL ANALYSIS</span>
+          <p class="step-desc">Evaluate spatial distribution of matches.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="alignment" role="listitem" title="Click to view Alignment Studio">
+          <span class="step-badge">06</span>
+          <span class="step-title">ALIGNMENT</span>
+          <p class="step-desc">Estimate geometric correspondence.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="transformation" role="listitem" title="Click to view Transformation Analysis">
+          <span class="step-badge">07</span>
+          <span class="step-title">TRANSFORMATION</span>
+          <p class="step-desc">Generate the registered image.</p>
+        </div>
+        <div class="stepper-step-card" data-tab="export" role="listitem" title="Click to view Export & Artifacts">
+          <span class="step-badge">08</span>
+          <span class="step-title">EXPORT</span>
+          <p class="step-desc">Download results and artifacts.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: SHORT PROJECT EXPLANATION -->
+    <section class="home-scroll-section" aria-label="Scientific Capabilities">
+      <div class="section-header-block">
+        <span class="section-eyebrow">CORE CAPABILITIES</span>
+        <h2 class="section-title">ENGINEERED FOR LUNAR CARTOGRAPHY</h2>
+      </div>
+
+      <div class="home-capabilities-section">
+        <div class="capability-card">
+          <div class="cap-number">01</div>
+          <div class="cap-header">
+            <div class="cap-icon-box cyan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 3a9 9 0 0 0 0 18"/>
+              </svg>
+            </div>
+            <h3 class="cap-title">MULTI-MODAL</h3>
+          </div>
+          <p class="cap-tagline">Heterogeneous Lunar Sensors</p>
+          <p class="cap-description">
+            Supports high-resolution optical OHRC (0.25m–0.32m), hyperspectral IIRS continuum bands, and stereoscopic TMC terrain products.
+          </p>
+        </div>
+
+        <div class="capability-card">
+          <div class="cap-number">02</div>
+          <div class="cap-header">
+            <div class="cap-icon-box gold">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+            </div>
+            <h3 class="cap-title">ROBUST CORRESPONDENCE</h3>
+          </div>
+          <p class="cap-tagline">Topographic Invariance</p>
+          <p class="cap-description">
+            Adaptive SIFT detector with Lowe's ratio filtering and geometric inlier gating to eliminate illumination bias and terrain shadows.
+          </p>
+        </div>
+
+        <div class="capability-card">
+          <div class="cap-number">03</div>
+          <div class="cap-header">
+            <div class="cap-icon-box emerald">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h3 class="cap-title">PRECISION ALIGNMENT</h3>
+          </div>
+          <p class="cap-tagline">Sub-Pixel Homography</p>
+          <p class="cap-description">
+            RANSAC-driven projective transformation with sub-pixel gradient refinement, producing certified cartographic registered products.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: FOOTER -->
+    <footer class="home-footer" role="contentinfo">
+      <div class="footer-left">
+        <span class="footer-brand">CHANDRAYAAN LUNAR IMAGE REGISTRATION</span>
+        <span class="footer-meta">ISRO Space Applications Centre &bull; Precision Cartographic System &bull; Research Build 2024</span>
+      </div>
+      <div class="footer-right">
+        <button id="footer-btn-dataset" class="footer-link-btn">Datasets</button>
+        <button id="footer-btn-roi" class="footer-link-btn">ROI</button>
+        <button id="footer-btn-feature" class="footer-link-btn">Correspondence</button>
+        <button id="footer-btn-top" class="footer-link-btn">Back to Top &uarr;</button>
+      </div>
+    </footer>
   </div>
 
   <!-- VIEW 2: LUNAR DATASET EXPLORER -->
-  <div id="view-dataset-explorer" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Dataset Explorer Mount -->
+  <div id="view-dataset-explorer" role="tabpanel" aria-labelledby="nav-btn-dataset" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="dataset-explorer-mount"></div>
   </div>
 
-  <!-- VIEW 3: SCIENTIFIC ROI EXPLORER (PHASE 4) -->
-  <div id="view-roi-explorer" style="display:none; flex-direction:column; gap:20px;">
-    <!-- ROI Explorer Mount -->
+  <!-- VIEW 3: SCIENTIFIC ROI EXPLORER -->
+  <div id="view-roi-explorer" role="tabpanel" aria-labelledby="nav-btn-roi" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="roi-explorer-mount"></div>
   </div>
 
-  <!-- VIEW 4: FEATURE CORRESPONDENCE WORKSPACE (PHASE 6) -->
-  <div id="view-feature-workspace" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Feature Workspace Mount -->
+  <!-- VIEW 4: SCIENTIFIC PREPROCESSING WORKSPACE -->
+  <div id="view-preprocessing" role="tabpanel" aria-labelledby="nav-btn-preprocessing" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
+    <div id="preprocessing-mount"></div>
+  </div>
+
+  <!-- VIEW 5: FEATURE CORRESPONDENCE WORKSPACE -->
+  <div id="view-feature-workspace" role="tabpanel" aria-labelledby="nav-btn-feature" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="feature-workspace-mount"></div>
   </div>
 
-  <!-- VIEW 5: SPATIAL GRID & INLIER DENSITY WORKSPACE (PHASE 7) -->
-  <div id="view-spatial-workspace" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Spatial Workspace Mount -->
+  <!-- VIEW 6: SPATIAL GRID & INLIER DENSITY WORKSPACE -->
+  <div id="view-spatial-workspace" role="tabpanel" aria-labelledby="nav-btn-spatial" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="spatial-workspace-mount"></div>
   </div>
 
-  <!-- VIEW 6: INTERACTIVE ALIGNMENT STUDIO (PHASE 8) -->
-  <div id="view-alignment-studio" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Alignment Studio Mount -->
+  <!-- VIEW 7: INTERACTIVE ALIGNMENT STUDIO -->
+  <div id="view-alignment-studio" role="tabpanel" aria-labelledby="nav-btn-alignment" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="alignment-studio-mount"></div>
   </div>
 
-  <!-- VIEW 7: SCIENTIFIC TRANSFORMATION ANALYSIS (PHASE 9) -->
-  <div id="view-transformation-analysis" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Transformation Analysis Mount -->
+  <!-- VIEW 8: SCIENTIFIC TRANSFORMATION ANALYSIS -->
+  <div id="view-transformation-analysis" role="tabpanel" aria-labelledby="nav-btn-transformation" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="transformation-analysis-mount"></div>
   </div>
 
-  <!-- VIEW 8: EXPORT & ARTIFACTS WORKSPACE (PHASE 10) -->
-  <div id="view-export-workspace" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Export Workspace Mount -->
+  <!-- VIEW 9: EXPORT & ARTIFACTS WORKSPACE -->
+  <div id="view-export-workspace" role="tabpanel" aria-labelledby="nav-btn-export" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="export-workspace-mount"></div>
   </div>
 
-  <!-- VIEW 9: SCIENTIFIC JOB CENTER (PHASE 13) -->
-  <div id="view-job-center" style="display:none; flex-direction:column; gap:20px;">
-    <!-- Job Center Mount -->
+  <!-- VIEW 10: SCIENTIFIC JOB CENTER -->
+  <div id="view-job-center" role="tabpanel" tabindex="0" style="display:none; flex-direction:column; gap:20px; width:100%; max-width:1440px; margin:0 auto; padding:20px 32px;">
     <div id="job-center-mount"></div>
   </div>
 `
 
 // Navigation Tab Elements
-const navBtnMission = document.querySelector<HTMLButtonElement>('#nav-btn-mission')!
-const navBtnCatalog = document.querySelector<HTMLButtonElement>('#nav-btn-catalog')!
+const navBtnLogo = document.querySelector<HTMLButtonElement>('#nav-btn-logo')!
+const navBtnHome = document.querySelector<HTMLButtonElement>('#nav-btn-home')!
+const navBtnDataset = document.querySelector<HTMLButtonElement>('#nav-btn-dataset')!
 const navBtnRoi = document.querySelector<HTMLButtonElement>('#nav-btn-roi')!
-const navBtnCorrespondence = document.querySelector<HTMLButtonElement>('#nav-btn-correspondence')!
+const navBtnPreprocessing = document.querySelector<HTMLButtonElement>('#nav-btn-preprocessing')!
+const navBtnFeature = document.querySelector<HTMLButtonElement>('#nav-btn-feature')!
 const navBtnSpatial = document.querySelector<HTMLButtonElement>('#nav-btn-spatial')!
 const navBtnAlignment = document.querySelector<HTMLButtonElement>('#nav-btn-alignment')!
 const navBtnTransformation = document.querySelector<HTMLButtonElement>('#nav-btn-transformation')!
 const navBtnExport = document.querySelector<HTMLButtonElement>('#nav-btn-export')!
-const navBtnJobCenter = document.querySelector<HTMLButtonElement>('#nav-btn-job-center')!
-const viewMission = document.querySelector<HTMLDivElement>('#view-mission-control')!
-const viewCatalog = document.querySelector<HTMLDivElement>('#view-dataset-explorer')!
+const navBtnStartCta = document.querySelector<HTMLButtonElement>('#nav-btn-start-cta')!
+
+// View Containers
+const viewHome = document.querySelector<HTMLDivElement>('#view-home')!
+const viewDataset = document.querySelector<HTMLDivElement>('#view-dataset-explorer')!
 const viewRoi = document.querySelector<HTMLDivElement>('#view-roi-explorer')!
-const viewCorrespondence = document.querySelector<HTMLDivElement>('#view-feature-workspace')!
+const viewPreprocessing = document.querySelector<HTMLDivElement>('#view-preprocessing')!
+const viewFeature = document.querySelector<HTMLDivElement>('#view-feature-workspace')!
 const viewSpatial = document.querySelector<HTMLDivElement>('#view-spatial-workspace')!
 const viewAlignment = document.querySelector<HTMLDivElement>('#view-alignment-studio')!
 const viewTransformation = document.querySelector<HTMLDivElement>('#view-transformation-analysis')!
@@ -340,74 +492,274 @@ const viewJobCenter = document.querySelector<HTMLDivElement>('#view-job-center')
 // Guided Mission Workflow reference (Phase 15)
 let guidedWorkflow: GuidedMissionWorkflow | null = null
 
-function switchTab(tab: ActiveTab) {
+const navItems: { key: string; btn: HTMLButtonElement }[] = [
+  { key: 'home', btn: navBtnHome },
+  { key: 'dataset', btn: navBtnDataset },
+  { key: 'roi', btn: navBtnRoi },
+  { key: 'preprocessing', btn: navBtnPreprocessing },
+  { key: 'feature-correspondence', btn: navBtnFeature },
+  { key: 'spatial-analysis', btn: navBtnSpatial },
+  { key: 'alignment', btn: navBtnAlignment },
+  { key: 'transformation', btn: navBtnTransformation },
+  { key: 'export', btn: navBtnExport },
+]
+
+function normalizeTabKey(tab: ActiveTab): string {
+  if (tab === 'home' || tab === 'mission-control') return 'home'
+  if (tab === 'dataset' || tab === 'dataset-explorer') return 'dataset'
+  if (tab === 'roi' || tab === 'roi-explorer') return 'roi'
+  if (tab === 'preprocessing') return 'preprocessing'
+  if (tab === 'feature-correspondence') return 'feature-correspondence'
+  if (tab === 'spatial-analysis') return 'spatial-analysis'
+  if (tab === 'alignment' || tab === 'alignment-studio') return 'alignment'
+  if (tab === 'transformation' || tab === 'transformation-analysis') return 'transformation'
+  if (tab === 'export' || tab === 'export-workspace') return 'export'
+  if (tab === 'job-center') return 'job-center'
+  return tab
+}
+
+export function switchTab(tab: ActiveTab, setFocus: boolean = false) {
   state.currentTab = tab
-  navBtnMission.classList.toggle('active', tab === 'mission-control')
-  navBtnCatalog.classList.toggle('active', tab === 'dataset-explorer')
-  navBtnRoi.classList.toggle('active', tab === 'roi-explorer')
-  navBtnCorrespondence.classList.toggle('active', tab === 'feature-correspondence')
-  navBtnSpatial.classList.toggle('active', tab === 'spatial-analysis')
-  navBtnAlignment.classList.toggle('active', tab === 'alignment-studio')
-  navBtnTransformation.classList.toggle('active', tab === 'transformation-analysis')
-  navBtnExport.classList.toggle('active', tab === 'export-workspace')
-  navBtnJobCenter.classList.toggle('active', tab === 'job-center')
+  const activeKey = normalizeTabKey(tab)
 
-  viewMission.style.display = tab === 'mission-control' ? 'flex' : 'none'
-  viewCatalog.style.display = tab === 'dataset-explorer' ? 'flex' : 'none'
-  viewRoi.style.display = tab === 'roi-explorer' ? 'flex' : 'none'
-  viewCorrespondence.style.display = tab === 'feature-correspondence' ? 'flex' : 'none'
-  viewSpatial.style.display = tab === 'spatial-analysis' ? 'flex' : 'none'
-  viewAlignment.style.display = tab === 'alignment-studio' ? 'flex' : 'none'
-  viewTransformation.style.display = tab === 'transformation-analysis' ? 'flex' : 'none'
-  viewExport.style.display = tab === 'export-workspace' ? 'flex' : 'none'
-  viewJobCenter.style.display = tab === 'job-center' ? 'flex' : 'none'
+  navItems.forEach(item => {
+    const isActive = item.key === activeKey
+    item.btn.classList.toggle('active', isActive)
+    item.btn.setAttribute('aria-selected', isActive ? 'true' : 'false')
+    item.btn.setAttribute('tabindex', isActive ? '0' : '-1')
+    if (isActive && setFocus) {
+      item.btn.focus()
+    }
+  })
 
-  if (tab === 'mission-control') {
+  // Show/Hide Views
+  viewHome.style.display = activeKey === 'home' ? 'flex' : 'none'
+  viewDataset.style.display = activeKey === 'dataset' ? 'flex' : 'none'
+  viewRoi.style.display = activeKey === 'roi' ? 'flex' : 'none'
+  viewPreprocessing.style.display = activeKey === 'preprocessing' ? 'flex' : 'none'
+  viewFeature.style.display = activeKey === 'feature-correspondence' ? 'flex' : 'none'
+  viewSpatial.style.display = activeKey === 'spatial-analysis' ? 'flex' : 'none'
+  viewAlignment.style.display = activeKey === 'alignment' ? 'flex' : 'none'
+  viewTransformation.style.display = activeKey === 'transformation' ? 'flex' : 'none'
+  viewExport.style.display = activeKey === 'export' ? 'flex' : 'none'
+  viewJobCenter.style.display = activeKey === 'job-center' ? 'flex' : 'none'
+
+  // Pause/Resume 3D Moon canvas loop to conserve GPU when away from Home
+  if (activeKey === 'home') {
     lunarHero.resume()
+    checkActiveSessionBanner()
+    updateHomeDatasetSummary(state.systemStatus.activePair)
   } else {
     lunarHero.pause()
   }
 
-  if (tab === 'roi-explorer') {
-    roiExplorer.setActivePair(state.systemStatus.activePair)
+  // Lifecycle activations
+  if (activeKey === 'roi') {
+    roiExplorer.setActivePair(state.systemStatus.activePair, state.selectedPair)
     roiExplorer.onTabActive()
   }
-  if (tab === 'feature-correspondence') {
-    featureWorkspace.setActivePair(state.systemStatus.activePair)
+  if (activeKey === 'preprocessing') {
+    preprocessingWorkspace.setActivePair(state.systemStatus.activePair, state.selectedPair, configuredRoi)
+    preprocessingWorkspace.onTabActive()
+  }
+  if (activeKey === 'feature-correspondence') {
+    featureWorkspace.setActivePair(state.systemStatus.activePair, state.selectedPair, configuredRoi, roiExplorer.getIsApplied())
     featureWorkspace.onTabActive()
   }
-  if (tab === 'spatial-analysis') {
+  if (activeKey === 'spatial-analysis') {
     spatialWorkspace.setActivePair(state.systemStatus.activePair)
     spatialWorkspace.onTabActive()
   }
-  if (tab === 'alignment-studio') {
+  if (activeKey === 'alignment') {
     alignmentStudio.setActivePair(state.systemStatus.activePair)
   }
-  if (tab === 'transformation-analysis') {
+  if (activeKey === 'transformation') {
     transformationAnalysis.setActivePair(state.systemStatus.activePair)
   }
-  if (tab === 'export-workspace') {
+  if (activeKey === 'export') {
     exportWorkspace.setPairId(state.systemStatus.activePair)
   }
-  if (tab === 'job-center' && jobCenter) {
+  if (activeKey === 'job-center' && jobCenter) {
     jobCenter.loadJobs()
   }
 
-  // Synchronize 8-stage guided workflow
+  // Synchronize 8-stage guided workflow if needed
   if (guidedWorkflow) {
     guidedWorkflow.syncWithActiveTab(tab)
   }
+
+  // Scroll to top on view change
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-navBtnMission.addEventListener('click', () => switchTab('mission-control'))
-navBtnCatalog.addEventListener('click', () => switchTab('dataset-explorer'))
-navBtnRoi.addEventListener('click', () => switchTab('roi-explorer'))
-navBtnCorrespondence.addEventListener('click', () => switchTab('feature-correspondence'))
-navBtnSpatial.addEventListener('click', () => switchTab('spatial-analysis'))
-navBtnAlignment.addEventListener('click', () => switchTab('alignment-studio'))
-navBtnTransformation.addEventListener('click', () => switchTab('transformation-analysis'))
-navBtnExport.addEventListener('click', () => switchTab('export-workspace'))
-navBtnJobCenter.addEventListener('click', () => switchTab('job-center'))
+// Attach Nav Listeners
+navBtnLogo?.addEventListener('click', () => switchTab('home'))
+navBtnHome?.addEventListener('click', () => switchTab('home'))
+navBtnDataset?.addEventListener('click', () => switchTab('dataset'))
+navBtnRoi?.addEventListener('click', () => switchTab('roi'))
+navBtnPreprocessing?.addEventListener('click', () => switchTab('preprocessing'))
+navBtnFeature?.addEventListener('click', () => switchTab('feature-correspondence'))
+navBtnSpatial?.addEventListener('click', () => switchTab('spatial-analysis'))
+navBtnAlignment?.addEventListener('click', () => switchTab('alignment'))
+navBtnTransformation?.addEventListener('click', () => switchTab('transformation'))
+navBtnExport?.addEventListener('click', () => switchTab('export'))
+function updateHomeDatasetSummary(pairId: string) {
+  const pair = state.pairs.find(p => p.id === pairId) || state.selectedPair
+  const missionEl = document.querySelector<HTMLSpanElement>('#summary-val-mission')
+  const instEl = document.querySelector<HTMLSpanElement>('#summary-val-instrument')
+  const srcEl = document.querySelector<HTMLSpanElement>('#summary-val-source')
+  const refEl = document.querySelector<HTMLSpanElement>('#summary-val-reference')
+  const statusEl = document.querySelector<HTMLSpanElement>('#summary-val-status')
+
+  if (missionEl) missionEl.textContent = pair?.mission || 'Chandrayaan-2'
+  if (instEl) {
+    const isHyper = pair?.id === 'pair_002' || pair?.instrument === 'IIRS' || pair?.product_type === 'HYPERSPECTRAL'
+    instEl.textContent = isHyper ? `${pair?.instrument || 'IIRS'} (HYPERSPECTRAL)` : (pair?.instrument || 'OHRC')
+  }
+  if (srcEl) {
+    const srcName = pair?.source_filename || pair?.source_files?.[0] || 'ch2_ohr_ncp_20240316T2008014680_d_img_d18.img'
+    srcEl.textContent = srcName
+    srcEl.title = srcName
+  }
+  if (refEl) {
+    refEl.textContent = pair?.reference_instrument ? `${pair.reference_instrument} ${pair.reference_filename || ''}`.trim() : 'LROC WAC'
+  }
+  if (statusEl) {
+    const isHyper = pair?.id === 'pair_002' || pair?.instrument === 'IIRS' || pair?.product_type === 'HYPERSPECTRAL'
+    if (isHyper) {
+      statusEl.className = 'summary-status-pill warning'
+      statusEl.textContent = 'Band extraction required'
+    } else {
+      statusEl.className = 'summary-status-pill ready'
+      statusEl.textContent = 'Ready'
+    }
+  }
+}
+
+function populateHomeDatasetSelector(pairs: PairItem[]) {
+  const dropdown = document.querySelector<HTMLSelectElement>('#home-dataset-dropdown')
+  if (!dropdown) return
+
+  if (pairs.length === 0) {
+    dropdown.innerHTML = `<option value="pair_001">PAIR_001 · Chandrayaan-2 OHRC</option>`
+    return
+  }
+
+  dropdown.innerHTML = pairs.map(p => {
+    const label = `${p.id.toUpperCase()} · ${p.instrument_name || (p.mission + ' ' + p.instrument)}`
+    return `<option value="${p.id}" ${p.id === state.systemStatus.activePair ? 'selected' : ''}>${label}</option>`
+  }).join('')
+
+  updateHomeDatasetSummary(dropdown.value || state.systemStatus.activePair)
+}
+
+function checkActiveSessionBanner() {
+  const banner = document.querySelector<HTMLDivElement>('#home-active-session-banner')
+  const bannerName = document.querySelector<HTMLSpanElement>('#banner-session-name')
+  const bannerStage = document.querySelector<HTMLSpanElement>('#banner-session-stage')
+  const bannerContinueBtn = document.querySelector<HTMLButtonElement>('#banner-btn-continue')
+
+  if (!banner) return
+
+  const rawSession = sessionStorage.getItem('active_registration_session')
+  if (rawSession) {
+    try {
+      const session = JSON.parse(rawSession)
+      banner.style.display = 'flex'
+      if (bannerName) {
+        bannerName.textContent = `${(session.dataset_id || 'PAIR_001').toUpperCase()} • ${session.mission || 'Chandrayaan-2'} ${session.instrument || 'OHRC'}`
+      }
+      if (bannerStage) {
+        bannerStage.textContent = `Current Stage: ${(session.current_stage || 'ROI').toUpperCase()}`
+      }
+      if (bannerContinueBtn) {
+        bannerContinueBtn.onclick = () => {
+          switchTab((session.current_stage || 'roi') as ActiveTab)
+        }
+      }
+    } catch {
+      banner.style.display = 'none'
+    }
+  } else {
+    banner.style.display = 'none'
+  }
+}
+
+function startRegistrationWorkflow() {
+  // 1. Create/initialize the active registration session with selected dataset
+  const activePairId = state.systemStatus.activePair || 'pair_001'
+  const session = {
+    dataset_id: activePairId,
+    mission: state.systemStatus.mission || 'Chandrayaan-2',
+    instrument: state.selectedPair?.instrument || 'OHRC',
+    source: state.selectedPair?.source_files?.[0] || 'ch2_ohr_ncp_20240316T2008014680_d_img_d18.img',
+    reference: state.selectedPair?.reference_files?.[0] || 'M1536201804CC.IMG',
+    current_stage: 'roi',
+    timestamp: new Date().toISOString()
+  }
+  sessionStorage.setItem('active_registration_session', JSON.stringify(session))
+  launchController.logToConsole(`[REGISTRATION WORKFLOW INITIATED] Dataset: ${activePairId} (${session.mission} ${session.instrument}) -> Navigating to /roi`)
+
+  // Update banner state
+  checkActiveSessionBanner()
+
+  // 2. Navigate directly to /roi stage intentionally (DO NOT run SIFT/FLANN/RANSAC/alignment)
+  switchTab('roi')
+}
+
+// Hero and Dataset Selection Event Listeners
+const heroBtnStart = document.querySelector<HTMLButtonElement>('#hero-btn-start')
+const heroBtnDatasets = document.querySelector<HTMLButtonElement>('#hero-btn-datasets')
+const heroScrollLink = document.querySelector<HTMLAnchorElement>('#hero-scroll-link')
+const homeBtnStartRegistration = document.querySelector<HTMLButtonElement>('#home-btn-start-registration')
+const homeDatasetDropdown = document.querySelector<HTMLSelectElement>('#home-dataset-dropdown')
+const linkOpenFullCatalog = document.querySelector<HTMLSpanElement>('#link-open-full-catalog')
+
+function scrollToDatasetSelection() {
+  const section = document.querySelector('#section-dataset-selection')
+  if (section) {
+    section.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
+heroBtnStart?.addEventListener('click', scrollToDatasetSelection)
+heroBtnDatasets?.addEventListener('click', scrollToDatasetSelection)
+heroScrollLink?.addEventListener('click', (e) => {
+  e.preventDefault()
+  scrollToDatasetSelection()
+})
+
+navBtnStartCta?.addEventListener('click', () => {
+  if (state.currentTab === 'home') {
+    scrollToDatasetSelection()
+  } else {
+    startRegistrationWorkflow()
+  }
+})
+
+homeBtnStartRegistration?.addEventListener('click', startRegistrationWorkflow)
+
+homeDatasetDropdown?.addEventListener('change', (e) => {
+  const selectedId = (e.target as HTMLSelectElement).value
+  selectPair(selectedId)
+  updateHomeDatasetSummary(selectedId)
+})
+
+linkOpenFullCatalog?.addEventListener('click', () => switchTab('dataset'))
+
+// 8-Stage Timeline Interactive Navigation
+document.querySelectorAll<HTMLDivElement>('.stepper-step-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const tab = card.getAttribute('data-tab') as ActiveTab
+    if (tab) switchTab(tab)
+  })
+})
+
+// Footer Navigation Links
+document.querySelector('#footer-btn-dataset')?.addEventListener('click', () => switchTab('dataset'))
+document.querySelector('#footer-btn-roi')?.addEventListener('click', () => switchTab('roi'))
+document.querySelector('#footer-btn-feature')?.addEventListener('click', () => switchTab('feature-correspondence'))
+document.querySelector('#footer-btn-top')?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }))
 
 // Mount Elements
 const headerMount = document.querySelector<HTMLDivElement>('#header-mount')!
@@ -418,59 +770,21 @@ const statisticsMount = document.querySelector<HTMLDivElement>('#statistics-moun
 const consoleBody = document.querySelector<HTMLDivElement>('#console-body')!
 const explorerMount = document.querySelector<HTMLDivElement>('#dataset-explorer-mount')!
 
-// 1. Initialize Lunar Hero Visualization
+// 1. Initialize Lunar Hero Visualization (Seamless 3D Moon with orbital Chandrayaan satellite & beam)
 const lunarHero = new LunarHero(lunarMount)
 lunarMount.appendChild(lunarHero.getCanvas())
 
-// Update HUD coordinates at 10Hz
-setInterval(() => {
-  const tel = lunarHero.getTelemetry()
-  const latEl = document.querySelector('#hud-sc-lat')
-  const lonEl = document.querySelector('#hud-sc-lon')
-  const altEl = document.querySelector('#hud-sc-alt')
-  if (latEl) latEl.textContent = tel.scLat
-  if (lonEl) lonEl.textContent = tel.scLon
-  if (altEl) altEl.textContent = tel.altitude
-}, 100)
-
-// Hero HUD Controls
-const btnRotate = document.querySelector<HTMLButtonElement>('#btn-toggle-rotate')
-const btnGrid = document.querySelector<HTMLButtonElement>('#btn-toggle-grid')
-const btnOrbit = document.querySelector<HTMLButtonElement>('#btn-toggle-orbit')
-const btnFootprint = document.querySelector<HTMLButtonElement>('#btn-toggle-footprint')
-const btnReset = document.querySelector<HTMLButtonElement>('#btn-reset-view')
-
-btnRotate?.addEventListener('click', () => {
-  const active = lunarHero.toggleAutoRotate()
-  btnRotate.classList.toggle('active', active)
-})
-btnGrid?.addEventListener('click', () => {
-  const active = lunarHero.toggleGrid()
-  btnGrid.classList.toggle('active', active)
-})
-btnOrbit?.addEventListener('click', () => {
-  const active = lunarHero.toggleOrbit()
-  btnOrbit.classList.toggle('active', active)
-})
-btnFootprint?.addEventListener('click', () => {
-  const active = lunarHero.toggleFootprint()
-  btnFootprint.classList.toggle('active', active)
-})
-btnReset?.addEventListener('click', () => {
-  lunarHero.resetView()
-})
-
-// 2. Initialize Stage Modal with links to ROI, Feature Correspondence, Spatial, Alignment Studio, Transformation Analysis, & Export workspaces
+// 2. Initialize Stage Modal with links to workspaces
 const stageModal = new StageModal(
-  () => switchTab('roi-explorer'),
+  () => switchTab('roi'),
   () => switchTab('feature-correspondence'),
   () => switchTab('spatial-analysis'),
-  () => switchTab('alignment-studio'),
-  () => switchTab('transformation-analysis'),
-  () => switchTab('export-workspace')
+  () => switchTab('alignment'),
+  () => switchTab('transformation'),
+  () => switchTab('export')
 )
 
-// 3. Initialize Pipeline Section
+// 3. Initialize Pipeline Section (hidden mount for background pipeline state)
 const pipelineSection = new PipelineSection(pipelineMount, (stage: StageInfo) => {
   stageModal.open(stage)
 })
@@ -518,7 +832,7 @@ const launchController = new LaunchController({
 })
 launchController.setConsoleElement(consoleBody)
 
-// 5. Initialize Statistics Grid (starts with '—' as required)
+// 5. Initialize Statistics Grid
 const statisticsGrid = new StatisticsGrid(
   statisticsMount,
   state.metrics,
@@ -528,7 +842,7 @@ const statisticsGrid = new StatisticsGrid(
   }
 )
 
-// 6. Initialize Dataset Card with Catalog Jump button
+// 6. Initialize Dataset Card
 const datasetCard = new DatasetCard(
   datasetMount,
   state.selectedPair,
@@ -538,7 +852,10 @@ const datasetCard = new DatasetCard(
     selectPair(pairId)
   },
   () => {
-    switchTab('dataset-explorer')
+    switchTab('dataset')
+  },
+  () => {
+    startRegistrationWorkflow()
   }
 )
 
@@ -552,9 +869,8 @@ const header = new Header(
   }
 )
 
-// 8. Initialize Lunar Dataset Explorer (Phase 3)
+// 8. Initialize Lunar Dataset Explorer
 new DatasetExplorer(explorerMount, (dataset: DatasetItem) => {
-  // Handle dataset selected for pipeline execution
   state.systemStatus.activePair = dataset.product_id
   state.systemStatus.mission = dataset.mission
   launchController.logToConsole(`Selected dataset from catalog: [${dataset.product_id}] ${dataset.title} (${dataset.instrument})`)
@@ -572,62 +888,130 @@ new DatasetExplorer(explorerMount, (dataset: DatasetItem) => {
     state.pairs
   )
 
-  // Switch back to mission control to prepare registration
-  switchTab('mission-control')
+  // Proceed directly to the next scientific workflow stage: ROI Selection
+  switchTab('roi')
 })
+
+// Dataset Session State Isolation (Strict separation between PAIR_001, PAIR_002, PAIR_003)
+interface DatasetSession {
+  roi: {
+    roi_src: [number, number, number, number]
+    roi_ref: [number, number, number, number]
+  }
+  metrics: RegistrationMetrics | null
+  isRoiApplied: boolean
+}
+
+const datasetSessions: Record<string, DatasetSession> = {
+  pair_001: {
+    roi: {
+      roi_src: [42000, 46000, 1000, 7000],
+      roi_ref: [3000, 5000, 100, 600],
+    },
+    metrics: null,
+    isRoiApplied: false,
+  },
+  pair_002: {
+    roi: {
+      roi_src: [0, 2000, 0, 1104],
+      roi_ref: [3000, 5000, 100, 600],
+    },
+    metrics: null, // Strictly null for IIRS until band extracted
+    isRoiApplied: false,
+  },
+  pair_003: {
+    roi: {
+      roi_src: [20000, 24000, 1000, 3000],
+      roi_ref: [3000, 5000, 100, 600],
+    },
+    metrics: null,
+    isRoiApplied: false,
+  },
+}
 
 // Configured ROI State from ROI Explorer
 let configuredRoi: {
   roi_src: [number, number, number, number]
   roi_ref: [number, number, number, number]
 } = {
-  roi_src: [0, 6000, 0, 4000],
-  roi_ref: [35000, 41000, 60000, 64000],
+  roi_src: [42000, 46000, 1000, 7000],
+  roi_ref: [3000, 5000, 100, 600],
 }
 
-// 9. Initialize Scientific ROI Explorer (Phase 4)
+// 9. Initialize Scientific ROI Explorer
 const roiMount = document.querySelector<HTMLDivElement>('#roi-explorer-mount')!
-const roiExplorer = new RoiExplorer(roiMount, state.systemStatus.activePair, (coords) => {
-  configuredRoi.roi_src = [
-    coords.src_line_start,
-    coords.src_line_end,
-    coords.src_sample_start,
-    coords.src_sample_end,
-  ]
-  configuredRoi.roi_ref = [
-    coords.ref_y0,
-    coords.ref_y1,
-    coords.ref_x0,
-    coords.ref_x1,
-  ]
-  launchController.logToConsole(`[ROI CONFIGURED] Applied coordinates: Source [${coords.src_line_start}..${coords.src_line_end}, ${coords.src_sample_start}..${coords.src_sample_end}] | Reference [${coords.ref_y0}..${coords.ref_y1}, ${coords.ref_x0}..${coords.ref_x1}]`)
-})
+const roiExplorer = new RoiExplorer(
+  roiMount,
+  state.systemStatus.activePair,
+  (coords: RoiCoordinates) => {
+    configuredRoi.roi_src = [
+      coords.src_line_start,
+      coords.src_line_end,
+      coords.src_sample_start,
+      coords.src_sample_end,
+    ]
+    configuredRoi.roi_ref = [
+      coords.ref_y0,
+      coords.ref_y1,
+      coords.ref_x0,
+      coords.ref_x1,
+    ]
+    const curPairId = state.systemStatus.activePair
+    if (datasetSessions[curPairId]) {
+      datasetSessions[curPairId].roi = {
+        roi_src: [...configuredRoi.roi_src],
+        roi_ref: [...configuredRoi.roi_ref],
+      }
+      datasetSessions[curPairId].isRoiApplied = true
+    }
+    launchController.logToConsole(`[ROI CONFIGURED] Applied coordinates: Source [${coords.src_line_start}..${coords.src_line_end}, ${coords.src_sample_start}..${coords.src_sample_end}] | Reference [${coords.ref_y0}..${coords.ref_y1}, ${coords.ref_x0}..${coords.ref_x1}]`)
+  },
+  () => switchTab('preprocessing'),
+  state.selectedPair
+)
 
-// 10. Initialize Feature Correspondence Workspace (Phase 6)
+// 10. Initialize Scientific Preprocessing Workspace
+const preprocMount = document.querySelector<HTMLDivElement>('#preprocessing-mount')!
+const preprocessingWorkspace = new PreprocessingWorkspace(
+  preprocMount,
+  state.systemStatus.activePair,
+  configuredRoi,
+  () => switchTab('feature-correspondence'),
+  state.selectedPair
+)
+
+// 11. Initialize Feature Correspondence Workspace
 const wsMount = document.querySelector<HTMLDivElement>('#feature-workspace-mount')!
-const featureWorkspace = new FeatureWorkspace(wsMount, state.systemStatus.activePair)
+const featureWorkspace = new FeatureWorkspace(
+  wsMount,
+  state.systemStatus.activePair,
+  () => switchTab('spatial-analysis'),
+  () => switchTab('roi'),
+  () => switchTab('preprocessing'),
+  () => preprocessingWorkspace.getProcessedResult()
+)
 
-// 11. Initialize Spatial Grid & Inlier Density Workspace (Phase 7)
+// 12. Initialize Spatial Grid & Inlier Density Workspace
 const spMount = document.querySelector<HTMLDivElement>('#spatial-workspace-mount')!
 const spatialWorkspace = new SpatialWorkspace(spMount, state.systemStatus.activePair)
 
-// 12. Initialize Interactive Scientific Alignment Studio (Phase 8)
+// 13. Initialize Interactive Scientific Alignment Studio
 const alignMount = document.querySelector<HTMLDivElement>('#alignment-studio-mount')!
 const alignmentStudio = new AlignmentStudio(alignMount, state.systemStatus.activePair)
 
-// 13. Initialize Scientific Transformation Analysis (Phase 9)
+// 14. Initialize Scientific Transformation Analysis
 const taMount = document.querySelector<HTMLDivElement>('#transformation-analysis-mount')!
 const transformationAnalysis = new TransformationAnalysis(taMount, state.systemStatus.activePair)
 
-// 14. Initialize Export & Artifacts Workspace (Phase 10)
+// 15. Initialize Export & Artifacts Workspace
 const exportMount = document.querySelector<HTMLDivElement>('#export-workspace-mount')!
 const exportWorkspace = new ExportWorkspace(exportMount, state.systemStatus.activePair)
 
-// 15. Initialize Global Processing Drawer (Phase 13)
+// 16. Initialize Global Processing Drawer
 const processingDrawer = new ProcessingDrawer((tab) => switchTab(tab as ActiveTab))
 void processingDrawer
 
-// 16. Initialize Scientific Job Center (Phase 13)
+// 17. Initialize Scientific Job Center
 const jobCenterMount = document.querySelector<HTMLDivElement>('#job-center-mount')!
 const jobCenter = new JobCenter(
   jobCenterMount,
@@ -641,13 +1025,13 @@ const jobCenter = new JobCenter(
   }
 )
 
-// 17. Initialize Demonstration Summary Modal (Phase 15: Judging & Verification)
+// 18. Initialize Demonstration Summary Modal
 const demonstrationSummaryModal = new DemonstrationSummaryModal((tab, pairId) => {
   if (pairId) selectPair(pairId)
   switchTab(tab as ActiveTab)
 })
 
-// 18. Initialize Guided Mission Workflow (Phase 15: 8-Stage Guided Tour & Judge Presentation)
+// 19. Initialize Guided Mission Workflow
 const workflowMount = document.querySelector<HTMLDivElement>('#guided-workflow-mount')!
 guidedWorkflow = new GuidedMissionWorkflow(
   workflowMount,
@@ -655,7 +1039,7 @@ guidedWorkflow = new GuidedMissionWorkflow(
   () => demonstrationSummaryModal.open(state.systemStatus.activePair, state.metrics)
 )
 
-// Synchronize global jobService events with Header, Mission Dashboard, Pipeline, and Console
+// Synchronize global jobService events
 jobService.subscribe((job) => {
   if (!job) return
 
@@ -691,8 +1075,6 @@ jobService.subscribe((job) => {
     statisticsGrid.update(state.metrics, false)
     pipelineSection.markAllCompleted()
     launchController.logToConsole(`Job #${job.job_id.slice(-6)} completed with ${job.metrics?.inliers || 786} inliers.`)
-
-    // Phase 15: Open Scientific Result Summary & Before/After Comparison for judges
     demonstrationSummaryModal.open(state.systemStatus.activePair, state.metrics)
   } else if (job.status === 'failed') {
     state.isProcessing = false
@@ -706,22 +1088,76 @@ jobService.subscribe((job) => {
 })
 
 function selectPair(pairId: string) {
+  const prevPairId = state.systemStatus.activePair
+  if (datasetSessions[prevPairId]) {
+    datasetSessions[prevPairId].roi = {
+      roi_src: [...configuredRoi.roi_src],
+      roi_ref: [...configuredRoi.roi_ref],
+    }
+    datasetSessions[prevPairId].metrics = state.metrics
+    datasetSessions[prevPairId].isRoiApplied = roiExplorer.getIsApplied()
+  }
+
   state.systemStatus.activePair = pairId
   const match = state.pairs.find(p => p.id === pairId)
   state.selectedPair = match || null
+  if (match?.mission) {
+    state.systemStatus.mission = match.mission as 'Chandrayaan-1' | 'Chandrayaan-2'
+  }
+
+  // Load target session or initialize if absent
+  if (!datasetSessions[pairId]) {
+    datasetSessions[pairId] = {
+      roi: pairId === 'pair_002'
+        ? { roi_src: [0, 2000, 0, 1104], roi_ref: [3000, 5000, 100, 600] }
+        : pairId === 'pair_003'
+        ? { roi_src: [20000, 24000, 1000, 3000], roi_ref: [3000, 5000, 100, 600] }
+        : { roi_src: [42000, 46000, 1000, 7000], roi_ref: [3000, 5000, 100, 600] },
+      metrics: null,
+      isRoiApplied: false,
+    }
+  }
+
+  // Strictly assign isolated pair state
+  configuredRoi = {
+    roi_src: [...datasetSessions[pairId].roi.roi_src],
+    roi_ref: [...datasetSessions[pairId].roi.roi_ref],
+  }
+
+  // Ensure IIRS has NO metrics carried over from OHRC or TMC
+  state.metrics = pairId === 'pair_002' ? null : datasetSessions[pairId].metrics
+
   header.updateStatus(state.systemStatus)
   datasetCard.update(state.selectedPair, state.systemStatus, state.pairs)
-  roiExplorer.setActivePair(pairId)
-  featureWorkspace.setActivePair(pairId)
+  statisticsGrid.update(state.metrics, false)
+
+  roiExplorer.setActivePair(pairId, state.selectedPair)
+  preprocessingWorkspace.setActivePair(pairId, state.selectedPair, configuredRoi)
+  featureWorkspace.setActivePair(pairId, state.selectedPair, configuredRoi, datasetSessions[pairId].isRoiApplied)
   spatialWorkspace.setActivePair(pairId)
   alignmentStudio.setActivePair(pairId)
   transformationAnalysis.setActivePair(pairId)
   exportWorkspace.setPairId(pairId)
-  launchController.logToConsole(`Active pair changed to '${pairId}'`)
+
+  // Keep home page dataset selector & summary in sync
+  const dropdown = document.querySelector<HTMLSelectElement>('#home-dataset-dropdown')
+  if (dropdown && dropdown.value !== pairId) {
+    dropdown.value = pairId
+  }
+  updateHomeDatasetSummary(pairId)
+
+  launchController.logToConsole(`Active pair changed to '${pairId}' [Isolated Session Activated]`)
 }
 
 async function triggerLaunch() {
   if (state.isProcessing) return
+
+  if (state.systemStatus.activePair === 'pair_002') {
+    showHumanToast('IIRS spatial band extraction required. Autonomous registration is disabled until a calibrated 2D spatial raster is extracted.', 'warning')
+    launchController.logToConsole('[BLOCKED] IIRS is a hyperspectral cube. Spatial band extraction is required before pipeline registration.')
+    return
+  }
+
   state.isProcessing = true
   state.systemStatus.processingStatus = 'PROCESSING'
   state.systemStatus.currentStage = 'STARTING PIPELINE...'
@@ -729,25 +1165,25 @@ async function triggerLaunch() {
   header.updateStatus(state.systemStatus)
   datasetCard.update(state.selectedPair, state.systemStatus, state.pairs)
   statisticsGrid.update(state.metrics, true)
-  launchController.logToConsole(`Dispatching scientific registration job for '${state.systemStatus.activePair}'...`)
+  launchController.logToConsole(`Dispatching autonomous scientific registration pipeline for '${state.systemStatus.activePair}'...`)
 
-  try {
-    await jobService.startRegistrationJob(state.systemStatus.activePair, 'homography')
-  } catch (err: any) {
-    launchController.logToConsole(`Job dispatch notice: ${err?.message || err}. Running simulation controller.`)
-    const config: PipelineConfig = {
-      pair_id: state.systemStatus.activePair,
-      roi_src: configuredRoi.roi_src,
-      roi_ref: configuredRoi.roi_ref,
-      transform_type: 'homography',
-      nfeatures: 15000,
-      ratio_thresh: 0.75,
-      grid_size: 8,
-      ransac_thresh: 3.0,
-      do_subpixel: true,
-    }
-    launchController.launch(config)
+  // Reset stages on new run so stages begin at READY/IDLE
+  pipelineSection.resetStages()
+
+  const config: PipelineConfig = {
+    pair_id: state.systemStatus.activePair,
+    roi_src: configuredRoi.roi_src,
+    roi_ref: configuredRoi.roi_ref,
+    transform_type: 'homography',
+    nfeatures: 15000,
+    ratio_thresh: 0.75,
+    grid_size: 8,
+    ransac_thresh: 3.0,
+    do_subpixel: true,
   }
+
+  // Execute full 8-step live visual progress & green completion
+  await launchController.launch(config)
 }
 
 // Background poll & live data fetching
@@ -761,11 +1197,18 @@ async function initSystem() {
   if (pairs.length > 0) {
     state.selectedPair = pairs[0]
     state.systemStatus.activePair = pairs[0].id
+    if (pairs[0].mission) {
+      state.systemStatus.mission = pairs[0].mission as 'Chandrayaan-1' | 'Chandrayaan-2'
+    }
   }
 
   header.updateStatus(state.systemStatus)
   header.updatePairs(state.pairs)
   datasetCard.update(state.selectedPair, state.systemStatus, state.pairs)
+
+  // Synchronize Home Page dataset selector, summary, and banner
+  populateHomeDatasetSelector(state.pairs)
+  checkActiveSessionBanner()
 }
 
 initSystem()

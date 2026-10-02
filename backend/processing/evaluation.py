@@ -39,7 +39,7 @@ def evaluate_registration_validity(n_inliers: int, spatial_coverage_ratio: float
     if n_inliers < 12:
         return (
             "INSUFFICIENT",
-            f"Insufficient inliers ({n_inliers} found, minimum 12 required for statistically overdetermined registration).",
+            f"Insufficient inliers ({n_inliers} found. Current validation threshold: 12 inliers).",
             False
         )
 

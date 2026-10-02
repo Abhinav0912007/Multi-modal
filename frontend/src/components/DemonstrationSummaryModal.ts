@@ -25,6 +25,9 @@ export class DemonstrationSummaryModal {
     this.container = document.createElement('div')
     this.container.id = 'demo-summary-modal-root'
     this.container.className = 'demo-summary-modal-backdrop'
+    this.container.setAttribute('role', 'dialog')
+    this.container.setAttribute('aria-modal', 'true')
+    this.container.setAttribute('aria-labelledby', 'demo-summary-title')
     this.container.style.display = 'none'
     document.body.appendChild(this.container)
 
@@ -126,11 +129,11 @@ export class DemonstrationSummaryModal {
           </div>
 
           <div class="demo-title-group">
-            <h1 class="demo-headline">REGISTRATION COMPLETE</h1>
+            <h1 class="demo-headline" id="demo-summary-title">REGISTRATION COMPLETE</h1>
             <p class="demo-subhead">ISRO Chandrayaan TMC Source × NASA LROC WAC Reference Multi-Modal Alignment</p>
           </div>
 
-          <button id="btn-close-demo-modal" class="demo-close-btn" title="Close (Esc)">✕</button>
+          <button id="btn-close-demo-modal" class="demo-close-btn" aria-label="Close Evaluation Summary Dialog" title="Close (Esc)">✕</button>
         </div>
 
         <!-- ONE-SENTENCE EXECUTIVE SUMMARY FOR JUDGES -->

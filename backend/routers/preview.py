@@ -49,63 +49,53 @@ def preview_roi(req: PreviewRequest):
         extract_tar_bundle(tar_path, extracted_dir)
     search_dir = extracted_dir if os.path.exists(extracted_dir) and os.listdir(extracted_dir) else source_dir
 
-    # Generate synthetic realistic lunar patch fallback if files are not on disk
-    def _create_synthetic_lunar_patch(h=400, w=400, is_ref=False, seed=None):
-        if seed is None:
-            seed = 42 if is_ref else 101
-        np.random.seed(seed % (2**31 - 1))
-        base = np.random.normal(120, 25, (h, w)).astype(np.float32)
-        # Add craters
-        num_craters = 6 + (seed % 6)
-        for _ in range(num_craters):
-            cx, cy = np.random.randint(40, w - 40), np.random.randint(40, h - 40)
-            cr = np.random.randint(15, 65)
-            y, x = np.ogrid[:h, :w]
-            dist = np.sqrt((x - cx)**2 + (y - cy)**2)
-            mask = dist <= cr
-            base[mask] -= (cr - dist[mask]) * 1.5
-            rim = (dist >= cr - 3) & (dist <= cr + 2)
-            base[rim] += 32
-        return np.clip(base, 0, 255).astype(np.uint8)
-
     src_img_path = None
     src_meta_path = None
     try:
         src_img_path, src_meta_path = scan_for_pds_data(search_dir)
-    except Exception:
-        pass
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Source scientific raster discovery failed: {e}")
 
     # Find reference
     ref_tifs = glob.glob(os.path.join(ref_dir, "*.tif*"))
     if not ref_tifs:
+        ref_tifs = glob.glob(os.path.join(ref_dir, "*.img*"))
+    if not ref_tifs:
         ref_tifs = glob.glob(os.path.join(PROJECT_ROOT, "data", "reference", "**", "*.tif*"), recursive=True)
 
-    if not src_img_path or not ref_tifs:
-        s_seed = abs(int(req.roi_src[0] * 31 + req.roi_src[2] * 17 + 101))
-        r_seed = abs(int(req.roi_ref[0] * 31 + req.roi_ref[2] * 17 + 202))
-        src_synth = _create_synthetic_lunar_patch(400, 400, is_ref=False, seed=s_seed)
-        ref_synth = _create_synthetic_lunar_patch(400, 400, is_ref=True, seed=r_seed)
-        return {
-            "source": _encode_image(src_synth),
-            "reference": _encode_image(ref_synth),
-            "source_shape": [req.roi_src[1] - req.roi_src[0], req.roi_src[3] - req.roi_src[2]],
-            "reference_shape": [req.roi_ref[1] - req.roi_ref[0], req.roi_ref[3] - req.roi_ref[2]],
-            "simulated": True
-        }
+    if not src_img_path:
+        raise HTTPException(status_code=404, detail="Primary scientific source product not found on disk")
+    if not ref_tifs:
+        raise HTTPException(status_code=404, detail="Primary scientific reference product not found on disk")
 
     try:
+        # Full requested ROI bounds
         src_patch, _ = read_pds_image(
             src_img_path, metadata_path=src_meta_path,
-            roi_lines=(req.roi_src[0], min(req.roi_src[0] + 2000, req.roi_src[1])),
-            roi_samples=(req.roi_src[2], min(req.roi_src[2] + 2000, req.roi_src[3]))
+            roi_lines=(req.roi_src[0], req.roi_src[1]),
+            roi_samples=(req.roi_src[2], req.roi_src[3])
         )
         ref_patch, _ = read_reference_image(
             ref_tifs[0],
-            roi=(req.roi_ref[0], min(req.roi_ref[0] + 2000, req.roi_ref[1]),
-                 req.roi_ref[2], min(req.roi_ref[2] + 2000, req.roi_ref[3]))
+            roi=(req.roi_ref[0], req.roi_ref[1],
+                 req.roi_ref[2], req.roi_ref[3])
         )
         src_8u = preprocess_image(src_patch)
         ref_8u = preprocess_image(ref_patch)
+
+        # Proportional resize for fast network transmission if patch exceeds preview resolution
+        max_preview_dim = 800
+        if max(src_8u.shape) > max_preview_dim:
+            scale = max_preview_dim / float(max(src_8u.shape))
+            new_w = max(10, int(src_8u.shape[1] * scale))
+            new_h = max(10, int(src_8u.shape[0] * scale))
+            src_8u = cv2.resize(src_8u, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        if max(ref_8u.shape) > max_preview_dim:
+            scale = max_preview_dim / float(max(ref_8u.shape))
+            new_w = max(10, int(ref_8u.shape[1] * scale))
+            new_h = max(10, int(ref_8u.shape[0] * scale))
+            ref_8u = cv2.resize(ref_8u, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
         return {
             "source": _encode_image(src_8u),
